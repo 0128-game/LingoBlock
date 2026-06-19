@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LingoBlock - 英語構成ビジュアルエディタ</title>
+    <title>LingoBlock - 横ドッキングエディタ</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
@@ -11,23 +11,16 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        /* 端子と線のスタイル設定 */
-        .terminal { position: absolute; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #0f172a; cursor: pointer; z-index: 30; transition: transform 0.1s; }
-        .terminal:hover { transform: scale(1.3); }
-        .terminal.selected { background: #ff5722 !important; box-shadow: 0 0 8px #ff5722; border-color: white; }
-        
-        .port-a { left: -6px; top: 50%; transform: translateY(-50%); background: #ffffff; }
-        .port-b { right: -6px; top: 50%; transform: translateY(-50%); background: #0f172a; border-color: #ffffff; }
-
-        svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
-        .wire { cursor: pointer; pointer-events: stroke; fill: none; stroke: #38bdf8; stroke-width: 3; }
-        .wire:hover { stroke-width: 7px; stroke: #f43f5e; }
+        /* ドッキング位置のインジケータ（近づいた時に光るライン） */
+        .drop-indicator {
+            position: absolute; width: 4px; height: 36px; background: #38bdf8;
+            box-shadow: 0 0 8px #38bdf8; border-radius: 2px; display: none; pointer-events: none; z-index: 40;
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-gray-100 font-sans overflow-hidden h-screen w-screen flex flex-col">
 
     <div class="flex flex-1 overflow-hidden relative">
-
         <aside class="w-80 bg-gray-800 border-r border-gray-700 flex flex-col p-4 z-50 overflow-y-auto no-scrollbar shadow-2xl">
             <h1 class="text-xl font-bold tracking-wider mb-4 text-center bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
                 LingoBlock
@@ -35,7 +28,7 @@
 
             <div class="mb-4">
                 <label class="block text-xs font-semibold text-gray-400 mb-1">ジャンル選択</label>
-                <select id="genre-select" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-blue-500">
+                <select id="genre-select" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm focus:outline-none">
                     <option value="myblocks">マイブロック</option>
                 </select>
             </div>
@@ -47,7 +40,7 @@
             </div>
 
             <div class="grid grid-cols-2 gap-2 mb-4">
-                <button id="btn-open-media" class="bg-indigo-600 hover:bg-indigo-500 text-xs py-1.5 rounded font-medium演">IMAGE CAPTURE</button>
+                <button id="btn-open-media" class="bg-indigo-600 hover:bg-indigo-500 text-xs py-1.5 rounded font-medium">IMAGE CAPTURE</button>
                 <button id="btn-open-add" class="bg-emerald-600 hover:bg-emerald-500 text-xs py-1.5 rounded font-medium">ブロック追加</button>
             </div>
 
@@ -68,7 +61,7 @@
         </aside>
 
         <main class="flex-1 relative bg-gray-950 overflow-hidden" id="editor-container">
-            <svg id="connections-svg"></svg>
+            <div id="drop-indicator" class="drop-indicator"></div>
             <div id="editor-workspace" class="absolute inset-0 origin-top-left touch-none" style="width: 3000px; height: 3000px; background-image: radial-gradient(#334155 1px, transparent 1px); background-size: 24px 24px;"></div>
         </main>
     </div>
@@ -97,7 +90,7 @@
                     </select>
                 </div>
                 <div class="flex justify-end space-x-2 pt-2">
-                    <button id="btn-close-add" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs">キャンセル</button>
+                    <button id="btn-close-add" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-xs">キャンセル</button>
                     <button id="btn-create-block" class="px-4 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold">追加</button>
                 </div>
             </div>
@@ -113,16 +106,16 @@
             "終末ブロック": "bg-gray-700 border-gray-500 text-gray-200", "その他": "bg-white border-gray-300 text-gray-900"
         };
 
-        let state = { components: [], wires: [], myBlocks: [] };
+        let state = { components: [], myBlocks: [] };
         let csvDatabase = {};
         let history = [];
         let historyIndex = -1;
         let draggingObj = null;
-        let selectedTerminal = null;
+        let snapTarget = null; // ドッキング対象の記録用
 
         const container = document.getElementById('editor-container');
         const workspace = document.getElementById('editor-workspace');
-        const svg = document.getElementById('connections-svg');
+        const indicator = document.getElementById('drop-indicator');
         const genreSelect = document.getElementById('genre-select');
         const paletteContainer = document.getElementById('palette-container');
         const saveCodeArea = document.getElementById('save-code-area');
@@ -130,7 +123,6 @@
         function utoa(str) { return btoa(unescape(encodeURIComponent(str))); }
         function atou(str) { return decodeURIComponent(escape(atob(str))); }
 
-        // --- アプリの起動 ---
         window.onload = async function() {
             setupEventListeners();
             loadFromLocalStorage();
@@ -141,9 +133,9 @@
             saveHistory();
         };
 
-        // --- 履歴管理システム ---
+        // --- 履歴システム ---
         function saveHistory() {
-            const current = JSON.stringify({ components: state.components, wires: state.wires });
+            const current = JSON.stringify({ components: state.components });
             if (historyIndex >= 0 && history[historyIndex] === current) return;
             history = history.slice(0, historyIndex + 1);
             history.push(current);
@@ -151,21 +143,9 @@
             updateUndoRedoButtons();
         }
 
-        function undo() {
-            if (historyIndex > 0) { historyIndex--; applyState(JSON.parse(history[historyIndex])); }
-        }
-
-        function redo() {
-            if (historyIndex < history.length - 1) { historyIndex++; applyState(JSON.parse(history[historyIndex])); }
-        }
-
-        function applyState(snap) {
-            state.components = snap.components.map(c => ({ ...c }));
-            state.wires = snap.wires.map(w => ({ ...w }));
-            renderWorkspace();
-            updateUndoRedoButtons();
-        }
-
+        function undo() { if (historyIndex > 0) { historyIndex--; applyState(JSON.parse(history[historyIndex])); } }
+        function redo() { if (historyIndex < history.length - 1) { historyIndex++; applyState(JSON.parse(history[historyIndex])); } }
+        function applyState(snap) { state.components = snap.components.map(c => ({ ...c })); renderWorkspace(); updateUndoRedoButtons(); }
         function updateUndoRedoButtons() {
             document.getElementById('btn-undo').disabled = historyIndex <= 0;
             document.getElementById('btn-redo').disabled = historyIndex >= history.length - 1;
@@ -187,19 +167,16 @@
                         const p = lines[i].split(',');
                         if (p.length >= 2) csvDatabase[genreName].push({ value: p[0].trim(), text: p[1].trim() });
                     }
-                } catch (e) { console.warn(name + " のFetch制限をスキップしました"); }
+                } catch (e) {}
             }
         }
 
         function updateGenreDropdown() {
             genreSelect.innerHTML = '<option value="myblocks">マイブロック</option>';
             Object.keys(csvDatabase).forEach(g => {
-                const opt = document.createElement('option');
-                opt.value = g; opt.textContent = g;
-                genreSelect.appendChild(opt);
+                const opt = document.createElement('option'); opt.value = g; opt.textContent = g; genreSelect.appendChild(opt);
             });
-            const keys = Object.keys(csvDatabase);
-            genreSelect.value = keys.length > 0 ? keys[0] : 'myblocks';
+            genreSelect.value = Object.keys(csvDatabase).length > 0 ? Object.keys(csvDatabase)[0] : 'myblocks';
         }
 
         function updatePalette() {
@@ -220,112 +197,71 @@
             });
         }
 
-        // --- ワークスペースの動的描画 ---
+        // --- ワークスペースの描画 ---
         function renderWorkspace() {
             workspace.innerHTML = '';
             state.components.forEach(c => {
-                const isTerminal = ["終末ブロック", "." , "?" , "!"].includes(c.value) || [".", "?", "!"].includes(c.text);
                 const blockEl = document.createElement('div');
                 blockEl.id = c.id;
                 blockEl.style.left = c.x + 'px'; blockEl.style.top = c.y + 'px';
-                blockEl.className = `absolute flex items-center justify-between px-3 py-2 rounded-lg border shadow-lg font-bold text-sm min-w-[100px] cursor-move ${POS_COLORS[c.value] || POS_COLORS['その他']}`;
-                
-                // 左側受信用（A端子）
-                const portA = document.createElement('div');
-                portA.className = "terminal port-a";
-                portA.onclick = (e) => { e.stopPropagation(); handleConnect(c.id, 'A', portA); };
-                blockEl.appendChild(portA);
+                // 接続線用の突起（端子）を廃止し、スッキリしたボタン風の見た目に変更
+                blockEl.className = `absolute flex items-center justify-center px-4 h-9 rounded-md border shadow-md font-bold text-sm min-w-[70px] cursor-move ${POS_COLORS[c.value] || POS_COLORS['その他']}`;
+                blockEl.textContent = c.text;
 
-                const txt = document.createElement('span');
-                txt.className = "mx-auto pointer-events-none";
-                txt.textContent = c.text;
-                blockEl.appendChild(txt);
-
-                // 右側送信用（B端子：終末ブロック以外に設置）
-                if (!isTerminal) {
-                    const portB = document.createElement('div');
-                    portB.className = "terminal port-b";
-                    portB.onclick = (e) => { e.stopPropagation(); handleConnect(c.id, 'B', portB); };
-                    blockEl.appendChild(portB);
-                }
-
-                // Wクリックによる削除（提示コード互換）
+                // Wクリックで削除
                 blockEl.onmousedown = (e) => {
-                    if (e.target.classList.contains('terminal')) return;
                     const now = Date.now();
                     if (now - c.lastClick < 300) {
                         state.components = state.components.filter(item => item.id !== c.id);
-                        state.wires = state.wires.filter(w => w.fromId !== c.id && w.toId !== c.id);
                         saveHistory(); renderWorkspace(); draggingObj = null; return;
                     }
                     c.lastClick = now;
                     draggingObj = c;
+                    // ドラッグ開始時に最前面に持ってくる
+                    workspace.appendChild(blockEl);
                 };
-
                 workspace.appendChild(blockEl);
             });
-            drawWires();
         }
 
-        // --- 接続線の描画（提示シミュレータの最速軽量SVGロジック） ---
-        function drawWires() {
-            svg.innerHTML = '';
-            const rect = container.getBoundingClientRect();
-            state.wires.forEach((w, idx) => {
-                const fEl = document.getElementById(w.fromId)?.querySelector('.port-b');
-                const tEl = document.getElementById(w.toId)?.querySelector('.port-a');
-                if (!fEl || !tEl) return;
+        // --- ドッキング位置のリアルタイム判定ロジック ---
+        function checkSnapPositions(draggedObj) {
+            const dragEl = document.getElementById(draggedObj.id);
+            if (!dragEl) return null;
 
-                const r1 = fEl.getBoundingClientRect();
-                const r2 = tEl.getBoundingClientRect();
+            const dragRect = dragEl.getBoundingClientRect();
+            let closest = null;
+            let minDistance = 40; // 磁石が反応する距離（ピクセル）
 
-                const x1 = r1.left - rect.left + 6; const y1 = r1.top - rect.top + 6;
-                const x2 = r2.left - rect.left + 6; const y2 = r2.top - rect.top + 6;
+            state.components.forEach(c => {
+                if (c.id === draggedObj.id) return; // 自分自身は除外
+                const targetEl = document.getElementById(c.id);
+                if (!targetEl) return;
 
-                // 綺麗なクランク・ベジェを描く直角 polyline 補間計算
-                const midX = x1 + (x2 - x1) / 2;
-                const points = `${x1},${y1} ${midX},${y1} ${midX},${y2} ${x2},${y2}`;
+                const targetRect = targetEl.getBoundingClientRect();
 
-                const poly = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
-                poly.setAttribute("points", points);
-                poly.setAttribute("class", "wire");
-                // クリックで配線削除
-                poly.onclick = (e) => {
-                    e.stopPropagation();
-                    state.wires.splice(idx, 1);
-                    saveHistory();
-                    renderWorkspace();
-                };
-                svg.appendChild(poly);
-            });
-        }
+                // ドラッグ中の左端と、対象の右端の距離
+                const distanceX = Math.abs(dragRect.left - targetRect.right);
+                // 上下のズレ（高さがだいたい合っているか）
+                const distanceY = Math.abs(dragRect.top - targetRect.top);
 
-        // --- 端子接続ロジック ---
-        function handleConnect(compId, termName, element) {
-            if (!selectedTerminal) {
-                selectedTerminal = { id: compId, term: termName, el: element };
-                element.classList.add('selected');
-            } else {
-                const t1 = selectedTerminal;
-                // B端子（出力）からA端子（入力）への接続のみ許可
-                if ((t1.term === 'B' && termName === 'A') || (t1.term === 'A' && termName === 'B')) {
-                    const fromNode = t1.term === 'B' ? t1 : { id: compId, term: termName };
-                    const toNode = t1.term === 'A' ? t1 : { id: compId, term: termName };
-
-                    if (fromNode.id !== toNode.id) {
-                        // 既存の同一ターゲット入力を上書き除去
-                        state.wires = state.wires.filter(w => !(w.toId === toNode.id));
-                        state.wires.push({ fromId: fromNode.id, toId: toNode.id });
-                        saveHistory();
-                    }
+                if (distanceX < minDistance && distanceY < 20) {
+                    minDistance = distanceX;
+                    // ドッキング位置（対象の右隣）の座標を算出
+                    closest = {
+                        target: c,
+                        snapX: c.x + targetEl.offsetWidth + 4, // 隙間を4px空ける
+                        snapY: c.y,
+                        // インジケータを表示する画面上の絶対位置
+                        indicatorX: targetRect.right + 2 - container.getBoundingClientRect().left,
+                        indicatorY: targetRect.top - container.getBoundingClientRect().top
+                    };
                 }
-                t1.el.classList.remove('selected');
-                selectedTerminal = null;
-                renderWorkspace();
-            }
+            });
+            return closest;
         }
 
-        // --- イベントバインド ---
+        // --- イベント制御 ---
         function setupEventListeners() {
             genreSelect.onchange = updatePalette;
 
@@ -338,41 +274,69 @@
                     state.components.push({
                         id: 'b' + Date.now() + Math.random().toString(36).substr(2, 4),
                         text: block.text, value: block.value,
-                        x: e.clientX - rect.left - 50, y: e.clientY - rect.top - 20, lastClick: 0
+                        x: e.clientX - rect.left - 45, y: e.clientY - rect.top - 18, lastClick: 0
                     });
                     saveHistory(); renderWorkspace();
                 } catch(err){}
             };
 
-            // ドラッグ移動制御
+            // マウス移動（ドラッグ中）
             window.onmousemove = e => {
                 if (draggingObj) {
-                    draggingObj.x += e.movementX; draggingObj.y += e.movementY;
+                    draggingObj.x += e.movementX;
+                    draggingObj.y += e.movementY;
                     const el = document.getElementById(draggingObj.id);
-                    if (el) { el.style.left = draggingObj.x + 'px'; el.style.top = draggingObj.y + 'px'; drawWires(); }
+                    if (el) {
+                        el.style.left = draggingObj.x + 'px';
+                        el.style.top = draggingObj.y + 'px';
+
+                        // 近くに吸着できるブロックがあるかチェック
+                        snapTarget = checkSnapPositions(draggingObj);
+                        if (snapTarget) {
+                            indicator.style.left = snapTarget.indicatorX + 'px';
+                            indicator.style.top = snapTarget.indicatorY + 'px';
+                            indicator.style.display = 'block';
+                        } else {
+                            indicator.style.display = 'none';
+                        }
+                    }
                 }
             };
-            window.onmouseup = () => { if (draggingObj) saveHistory(); draggingObj = null; };
 
-            // ショートカットキー設定
+            // マウスを離した（ドッキングの確定）
+            window.onmouseup = () => {
+                if (draggingObj) {
+                    if (snapTarget) {
+                        // 磁石のようにピタッと座標を合わせる
+                        draggingObj.x = snapTarget.snapX;
+                        draggingObj.y = snapTarget.snapY;
+                        const el = document.getElementById(draggingObj.id);
+                        if (el) {
+                            el.style.left = draggingObj.x + 'px';
+                            el.style.top = draggingObj.y + 'px';
+                        }
+                    }
+                    indicator.style.display = 'none';
+                    snapTarget = null;
+                    saveHistory();
+                    draggingObj = null;
+                }
+            };
+
             window.onkeydown = e => {
-                if (e.ctrlKey || e.metaKey) {
-                    if (e.key === 'z') { e.preventDefault(); undo(); }
-                    if (e.key === 'y') { e.preventDefault(); redo(); }
-                }
+                if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
+                if ((e.ctrlKey || e.metaKey) && e.key === 'y') { e.preventDefault(); redo(); }
             };
 
-            // 各種コントロールボタン
             document.getElementById('btn-undo').onclick = undo;
             document.getElementById('btn-redo').onclick = redo;
             document.getElementById('btn-save').onclick = () => { autoSaveToLocalStorage(); alert("保存しました"); };
             document.getElementById('btn-reset').onclick = () => {
                 if(confirm("全配置オブジェクトをリセットしますか？")) {
-                    state.components = []; state.wires = []; saveHistory(); renderWorkspace();
+                    state.components = []; saveHistory(); renderWorkspace();
                 }
             };
 
-            // ブロック追加
             document.getElementById('btn-open-add').onclick = () => document.getElementById('modal-add').classList.remove('hidden');
             document.getElementById('btn-close-add').onclick = () => document.getElementById('modal-add').classList.add('hidden');
             document.getElementById('btn-create-block').onclick = () => {
@@ -387,19 +351,16 @@
                 document.getElementById('modal-add').classList.add('hidden');
             };
 
-            // Base64コード変換
             document.getElementById('btn-export').onclick = () => {
-                const raw = JSON.stringify({ components: state.components, wires: state.wires });
-                saveCodeArea.value = utoa(raw);
+                saveCodeArea.value = utoa(JSON.stringify({ components: state.components }));
             };
             document.getElementById('btn-import').onclick = () => {
                 try {
                     const snap = JSON.parse(atou(saveCodeArea.value.trim()));
                     applyState(snap); saveHistory();
-                } catch(e) { alert("不正なコードです。データの展開に失敗しました。"); }
+                } catch(e) { alert("不正なコードです。"); }
             };
 
-            // キャプチャ(html2canvas)
             document.getElementById('btn-open-media').onclick = async () => {
                 const btn = document.getElementById('btn-open-media');
                 btn.innerText = "PROCESSING...";
@@ -411,14 +372,14 @@
         }
 
         function autoSaveToLocalStorage() {
-            localStorage.setItem('lingo_workspace', JSON.stringify({ components: state.components, wires: state.wires }));
-            localStorage.setItem('lingo_myblocks', JSON.stringify(state.myBlocks));
+            localStorage.setItem('lingo_snap_workspace', JSON.stringify({ components: state.components }));
+            localStorage.setItem('lingo_snap_myblocks', JSON.stringify(state.myBlocks));
         }
 
         function loadFromLocalStorage() {
-            const w = localStorage.getItem('lingo_workspace');
-            const m = localStorage.getItem('lingo_myblocks');
-            if (w) { const p = JSON.parse(w); state.components = p.components || []; state.wires = p.wires || []; }
+            const w = localStorage.getItem('lingo_snap_workspace');
+            const m = localStorage.getItem('lingo_snap_myblocks');
+            if (w) { const p = JSON.parse(w); state.components = p.components || []; }
             if (m) state.myBlocks = JSON.parse(m);
         }
     </script>
