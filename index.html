@@ -190,12 +190,21 @@
         function utoa(str) { return btoa(unescape(encodeURIComponent(str))); }
         function atou(str) { return decodeURIComponent(escape(atob(str))); }
 
-        // --- アプリ初期化 ---
+// --- アプリ初期化 ---
         async function initApp() {
             setupEventListeners();
-            await loadCSVFiles();
-            loadFromLocalStorage();
-            updatePalette();
+            loadFromLocalStorage(); // ローカルストレージを先に読み込み
+            await loadCSVFiles();   // CSVの読み込みを完全に待つ
+            
+            // CSVが1つでも読み込まれていたら、最初のジャンルを強制選択してパレットを更新
+            const genres = Object.keys(csvDatabase);
+            if (genres.length > 0) {
+                genreSelect.value = genres[0];
+            } else {
+                genreSelect.value = 'myblocks';
+            }
+            
+            updatePalette(); // パレットを強制更新
             renderWorkspace();
             saveHistory();
         }
@@ -203,20 +212,22 @@
         // --- CSV自動シーケンシャルFetch ---
         async function loadCSVFiles() {
             let index = 1;
-            const origin = window.location.origin + window.location.pathname;
-            const rootPath = origin.substring(0, origin.lastIndexOf('/'));
+            // 確実に相対パスとして動作するように調整
+            const rootPath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
             
             while (true) {
-                // 絶対パスを構築
                 const csvUrl = `${rootPath}/csv/csv${index}.csv`;
                 try {
                     const response = await fetch(csvUrl);
-                    if (!response.ok) break; // 404等で終了
+                    if (!response.ok) {
+                        console.log(`csv${index}.csv が見つからないか、読み込みが終了しました。`);
+                        break; 
+                    }
                     const text = await response.text();
                     parseCSV(text);
                     index++;
                 } catch (e) {
-                    console.warn(`CSV fetch finished or blocked at sequence: ${index}`, e);
+                    console.error(`CSV fetch error at index ${index}:`, e);
                     break;
                 }
             }
