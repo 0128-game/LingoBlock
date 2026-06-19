@@ -197,15 +197,46 @@
             });
         }
 
-        // --- ワークスペースの描画 ---
+// --- ワークスペースの描画（結合状態の可視化版） ---
         function renderWorkspace() {
             workspace.innerHTML = '';
+            
             state.components.forEach(c => {
+                const targetEl = document.getElementById(c.id);
+                // 自身のブロックサイズ（未描画時はデフォルト100pxとする）
+                const myWidth = targetEl ? targetEl.offsetWidth : 100;
+
+                // 左隣、右隣にピッタリくっついているブロックがあるか探す（判定幅: 10px以内）
+                const hasLeftNeighbor = state.components.some(other => 
+                    other.id !== c.id && 
+                    Math.abs(other.y - c.y) < 5 && 
+                    Math.abs((other.x + (document.getElementById(other.id)?.offsetWidth || 100) + 6) - c.x) < 10
+                );
+
+                const hasRightNeighbor = state.components.some(other => 
+                    other.id !== c.id && 
+                    Math.abs(other.y - c.y) < 5 && 
+                    Math.abs((c.x + myWidth + 6) - other.x) < 10
+                );
+
+                // 隣接状態に合わせて角の丸み（Tailwindクラス）を動的に切り替える
+                let borderRoundClass = "rounded-md"; // 通常（左右どこにもくっついていない）
+                if (hasLeftNeighbor && hasRightNeighbor) {
+                    borderRoundClass = "rounded-none"; // 両側がくっついている（真ん中のブロック）
+                } else if (hasLeftNeighbor) {
+                    borderRoundClass = "rounded-r-md rounded-l-none border-l-0"; // 左側だけ結合（右端のブロック）
+                } else if (hasRightNeighbor) {
+                    borderRoundClass = "rounded-l-md rounded-r-none border-r-0"; // 右側だけ結合（左端のブロック）
+                }
+
+                // ブロック要素の作成
                 const blockEl = document.createElement('div');
                 blockEl.id = c.id;
-                blockEl.style.left = c.x + 'px'; blockEl.style.top = c.y + 'px';
-                // 接続線用の突起（端子）を廃止し、スッキリしたボタン風の見た目に変更
-                blockEl.className = `absolute flex items-center justify-center px-4 h-9 rounded-md border shadow-md font-bold text-sm min-w-[70px] cursor-move ${POS_COLORS[c.value] || POS_COLORS['その他']}`;
+                blockEl.style.left = c.x + 'px'; 
+                blockEl.style.top = c.y + 'px';
+                
+                // 動的な丸みクラスと、結合時に少し浮き出るような陰影(shadow)をブレンド
+                blockEl.className = `absolute flex items-center justify-center px-4 h-9 border shadow-md font-bold text-sm min-w-[70px] cursor-move transition-all duration-150 ${borderRoundClass} ${POS_COLORS[c.value] || POS_COLORS['その他']}`;
                 blockEl.textContent = c.text;
 
                 // Wクリックで削除
@@ -217,48 +248,73 @@
                     }
                     c.lastClick = now;
                     draggingObj = c;
-                    // ドラッグ開始時に最前面に持ってくる
                     workspace.appendChild(blockEl);
                 };
                 workspace.appendChild(blockEl);
             });
         }
-
-        // --- ドッキング位置のリアルタイム判定ロジック ---
+// --- ドッキング位置のリアルタイム判定ロジック（強化版） ---
         function checkSnapPositions(draggedObj) {
             const dragEl = document.getElementById(draggedObj.id);
             if (!dragEl) return null;
 
             const dragRect = dragEl.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
             let closest = null;
-            let minDistance = 40; // 磁石が反応する距離（ピクセル）
+            let minDistance = 50; // 反応する距離（px）
 
             state.components.forEach(c => {
-                if (c.id === draggedObj.id) return; // 自分自身は除外
+                if (c.id === draggedObj.id) return;
                 const targetEl = document.getElementById(c.id);
                 if (!targetEl) return;
 
                 const targetRect = targetEl.getBoundingClientRect();
-
-                // ドラッグ中の左端と、対象の右端の距離
-                const distanceX = Math.abs(dragRect.left - targetRect.right);
-                // 上下のズレ（高さがだいたい合っているか）
                 const distanceY = Math.abs(dragRect.top - targetRect.top);
 
-                if (distanceX < minDistance && distanceY < 20) {
-                    minDistance = distanceX;
-                    // ドッキング位置（対象の右隣）の座標を算出
-                    closest = {
-                        target: c,
-                        snapX: c.x + targetEl.offsetWidth + 4, // 隙間を4px空ける
-                        snapY: c.y,
-                        // インジケータを表示する画面上の絶対位置
-                        indicatorX: targetRect.right + 2 - container.getBoundingClientRect().left,
-                        indicatorY: targetRect.top - container.getBoundingClientRect().top
-                    };
+                // 上下のズレが少ない場合のみ判定
+                if (distanceY < 25) {
+                    // パターン①：ターゲットの【右側】にドラッグ中のブロックを近づけた場合（Aの後ろにB）
+                    const distRight = Math.abs(dragRect.left - targetRect.right);
+                    if (distRight < minDistance) {
+                        minDistance = distRight;
+                        closest = {
+                            type: 'insert-after',
+                            target: c,
+                            snapX: c.x + targetEl.offsetWidth + 6,
+                            snapY: c.y,
+                            indicatorX: targetRect.right + 3 - containerRect.left,
+                            indicatorY: targetRect.top - containerRect.top
+                        };
+                    }
+
+                    // パターン②：ターゲットの【左側】にドラッグ中のブロックを近づけた場合（Bの前にA / 割り込み）
+                    const distLeft = Math.abs(dragRect.right - targetRect.left);
+                    if (distLeft < minDistance) {
+                        minDistance = distLeft;
+                        closest = {
+                            type: 'insert-before',
+                            target: c,
+                            snapX: c.x - dragEl.offsetWidth - 6,
+                            snapY: c.y,
+                            indicatorX: targetRect.left - 3 - containerRect.left,
+                            indicatorY: targetRect.top - containerRect.top
+                        };
+                    }
                 }
             });
             return closest;
+        }
+
+        // --- 連鎖的に後ろのブロックを押し出す処理 ---
+        function shiftBlocksRight(startX, startY, shiftWidth) {
+            // 同じ行（Y座標がほぼ同じ）で、挿入位置より右にあるブロックをすべて右にズラす
+            state.components.forEach(c => {
+                if (Math.abs(c.y - startY) < 10 && c.x >= startX) {
+                    c.x += shiftWidth;
+                    const el = document.getElementById(c.id);
+                    if (el) el.style.left = c.x + 'px';
+                }
+            });
         }
 
         // --- イベント制御 ---
@@ -290,7 +346,7 @@
                         el.style.left = draggingObj.x + 'px';
                         el.style.top = draggingObj.y + 'px';
 
-                        // 近くに吸着できるブロックがあるかチェック
+                        // 吸着位置の判定
                         snapTarget = checkSnapPositions(draggingObj);
                         if (snapTarget) {
                             indicator.style.left = snapTarget.indicatorX + 'px';
@@ -303,13 +359,25 @@
                 }
             };
 
-            // マウスを離した（ドッキングの確定）
+            // マウスを離した（ドッキング確定・割り込み処理）
             window.onmouseup = () => {
                 if (draggingObj) {
                     if (snapTarget) {
-                        // 磁石のようにピタッと座標を合わせる
-                        draggingObj.x = snapTarget.snapX;
+                        const dragEl = document.getElementById(draggingObj.id);
+                        const shiftWidth = dragEl ? dragEl.offsetWidth + 6 : 80;
+
+                        if (snapTarget.type === 'insert-before') {
+                            // 割り込み：ターゲットがある位置より右側のブロックを押し出す
+                            shiftBlocksRight(snapTarget.target.x, snapTarget.target.y, shiftWidth);
+                            draggingObj.x = snapTarget.target.x; // ターゲットの元あった位置に入る
+                        } else if (snapTarget.type === 'insert-after') {
+                            // 後ろにくっつける：ターゲットの右隣に元々ブロックがあったら押し出す
+                            shiftBlocksRight(snapTarget.snapX, snapTarget.snapY, shiftWidth);
+                            draggingObj.x = snapTarget.snapX;
+                        }
+                        
                         draggingObj.y = snapTarget.snapY;
+                        
                         const el = document.getElementById(draggingObj.id);
                         if (el) {
                             el.style.left = draggingObj.x + 'px';
@@ -323,6 +391,7 @@
                 }
             };
 
+            //（※残りのショートカットキーや各ボタンのクリックイベントは前のコードと同じです）
             window.onkeydown = e => {
                 if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
                 if ((e.ctrlKey || e.metaKey) && e.key === 'y') { e.preventDefault(); redo(); }
@@ -370,7 +439,6 @@
                 btn.innerText = "IMAGE CAPTURE";
             };
         }
-
         function autoSaveToLocalStorage() {
             localStorage.setItem('lingo_snap_workspace', JSON.stringify({ components: state.components }));
             localStorage.setItem('lingo_snap_myblocks', JSON.stringify(state.myBlocks));
