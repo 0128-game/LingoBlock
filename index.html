@@ -3,23 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>英語構成ビジュアルエディタ (デバッグ版)</title>
+    <title>LingoBlock - 英語構成ビジュアルエディタ</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
-        .leader-line { z-index: 40; pointer-events: auto !important; cursor: pointer; }
-        .port { transition: transform 0.1s; }
-        .port:hover { transform: scale(1.3); }
+        body { user-select: none; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* 端子と線のスタイル設定 */
+        .terminal { position: absolute; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #0f172a; cursor: pointer; z-index: 30; transition: transform 0.1s; }
+        .terminal:hover { transform: scale(1.3); }
+        .terminal.selected { background: #ff5722 !important; box-shadow: 0 0 8px #ff5722; border-color: white; }
+        
+        .port-a { left: -6px; top: 50%; transform: translateY(-50%); background: #ffffff; }
+        .port-b { right: -6px; top: 50%; transform: translateY(-50%); background: #0f172a; border-color: #ffffff; }
+
+        svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+        .wire { cursor: pointer; pointer-events: stroke; fill: none; stroke: #38bdf8; stroke-width: 3; }
+        .wire:hover { stroke-width: 7px; stroke: #f43f5e; }
     </style>
 </head>
-<body class="bg-gray-900 text-gray-100 font-sans overflow-hidden h-screen w-screen flex flex-col select-none">
+<body class="bg-gray-900 text-gray-100 font-sans overflow-hidden h-screen w-screen flex flex-col">
 
     <div class="flex flex-1 overflow-hidden relative">
+
         <aside class="w-80 bg-gray-800 border-r border-gray-700 flex flex-col p-4 z-50 overflow-y-auto no-scrollbar shadow-2xl">
             <h1 class="text-xl font-bold tracking-wider mb-4 text-center bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-                ENG-BLOCK EDITOR (DEBUG)
+                LingoBlock
             </h1>
 
             <div class="mb-4">
@@ -30,68 +41,36 @@
             </div>
 
             <div class="grid grid-cols-2 gap-2 mb-4">
-                <button id="btn-undo" class="bg-gray-700 hover:bg-gray-600 text-xs py-1.5 rounded font-medium transition">元に戻す</button>
-                <button id="btn-redo" class="bg-gray-700 hover:bg-gray-600 text-xs py-1.5 rounded font-medium transition">やり直す</button>
-                <button id="btn-save" class="bg-blue-600 hover:bg-blue-500 text-xs py-1.5 rounded font-medium transition col-span-2">手動保存 (LocalStorage)</button>
+                <button id="btn-undo" class="bg-gray-700 hover:bg-gray-600 text-xs py-1.5 rounded font-medium disabled:opacity-30">UNDO (元に戻す)</button>
+                <button id="btn-redo" class="bg-gray-700 hover:bg-gray-600 text-xs py-1.5 rounded font-medium disabled:opacity-30">REDO (やり直す)</button>
+                <button id="btn-save" class="bg-blue-600 hover:bg-blue-500 text-xs py-1.5 rounded font-medium col-span-2">ブラウザに保存 (LocalStorage)</button>
             </div>
 
             <div class="grid grid-cols-2 gap-2 mb-4">
-                <button id="btn-open-media" class="bg-indigo-600 hover:bg-indigo-500 text-xs py-1.5 rounded font-medium transition">スクショ・録画</button>
-                <button id="btn-open-add" class="bg-emerald-600 hover:bg-emerald-500 text-xs py-1.5 rounded font-medium transition">ブロック追加</button>
+                <button id="btn-open-media" class="bg-indigo-600 hover:bg-indigo-500 text-xs py-1.5 rounded font-medium演">IMAGE CAPTURE</button>
+                <button id="btn-open-add" class="bg-emerald-600 hover:bg-emerald-500 text-xs py-1.5 rounded font-medium">ブロック追加</button>
             </div>
 
             <div class="mb-4 border-t border-gray-700 pt-3">
-                <label class="block text-xs font-semibold text-gray-400 mb-1">データ書き出し欄</label>
-                <textarea id="save-code-area" class="w-full h-16 bg-gray-900 border border-gray-700 rounded p-1 text-xs font-mono resize-none focus:outline-none focus:border-blue-500 text-gray-300" placeholder="エンコードデータ"></textarea>
+                <label class="block text-xs font-semibold text-gray-400 mb-1">データコードエリア</label>
+                <textarea id="save-code-area" class="w-full h-16 bg-gray-900 border border-gray-700 rounded p-1 text-xs font-mono resize-none focus:outline-none text-emerald-400" placeholder="コードがここに生成/展開されます..."></textarea>
                 <div class="grid grid-cols-2 gap-2 mt-1">
-                    <button id="btn-export" class="bg-gray-700 hover:bg-gray-600 text-xs py-1 rounded">書き出し</button>
-                    <button id="btn-import" class="bg-gray-700 hover:bg-gray-600 text-xs py-1 rounded">読み込み</button>
+                    <button id="btn-export" class="bg-gray-700 hover:bg-gray-600 text-xs py-1 rounded">SAVE CODE</button>
+                    <button id="btn-import" class="bg-gray-700 hover:bg-gray-600 text-xs py-1 rounded">LOAD CODE</button>
                 </div>
+                <button id="btn-reset" class="w-full bg-red-600 hover:bg-red-500 text-xs py-1 rounded mt-2 font-medium">ALL RESET (全消去)</button>
             </div>
 
-            <button id="btn-stop-record" class="hidden w-full bg-red-600 hover:bg-red-500 text-white font-bold py-2 rounded mb-4 animate-pulse text-sm">
-                ■ 録画を停止して保存
-            </button>
-
             <div class="flex-1 border-t border-gray-700 pt-3 flex flex-col overflow-hidden">
-                <label class="block text-xs font-semibold text-gray-400 mb-2">パレット (ドラッグして右へ配置)</label>
+                <label class="block text-xs font-semibold text-gray-400 mb-2">パレット (ドラッグして配置)</label>
                 <div id="palette-container" class="flex-1 overflow-y-auto space-y-2 p-1 bg-gray-900/50 rounded border border-gray-800/80 min-h-[150px]"></div>
             </div>
         </aside>
 
         <main class="flex-1 relative bg-gray-950 overflow-hidden" id="editor-container">
+            <svg id="connections-svg"></svg>
             <div id="editor-workspace" class="absolute inset-0 origin-top-left touch-none" style="width: 3000px; height: 3000px; background-image: radial-gradient(#334155 1px, transparent 1px); background-size: 24px 24px;"></div>
-
-            <div class="absolute top-4 right-4 z-40 bg-gray-800/80 backdrop-blur border border-gray-700 px-3 py-1.5 rounded-lg flex items-center space-x-3 text-sm shadow-lg">
-                <button id="btn-zoom-out" class="font-bold hover:text-blue-400 px-1">－</button>
-                <span id="zoom-display" class="font-mono text-xs w-10 text-center">100%</span>
-                <button id="btn-zoom-in" class="font-bold hover:text-blue-400 px-1">＋</button>
-            </div>
         </main>
-    </div>
-
-    <div id="modal-media" class="hidden fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center">
-        <div class="bg-gray-800 border border-gray-700 p-6 rounded-xl w-80 shadow-2xl">
-            <h3 class="text-base font-bold mb-4 text-indigo-400">📷 スクショ・録画設定</h3>
-            <div class="space-y-4 text-sm">
-                <div>
-                    <span class="block text-xs text-gray-400 mb-1">出力モード</span>
-                    <label class="inline-flex items-center mr-4"><input type="radio" name="media-type" value="screenshot" checked> スクショ</label>
-                    <label class="inline-flex items-center"><input type="radio" name="media-type" value="record"> 録画 (WebM)</label>
-                </div>
-                <div>
-                    <span class="block text-xs text-gray-400 mb-1">キャプチャ範囲</span>
-                    <select id="media-range" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1">
-                        <option value="all">全体 (画面全体)</option>
-                        <option value="editor">エディタのみ</option>
-                    </select>
-                </div>
-                <div class="flex justify-end space-x-2 pt-2">
-                    <button id="btn-close-media" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs">キャンセル</button>
-                    <button id="btn-start-media" class="px-4 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-bold">開始</button>
-                </div>
-            </div>
-        </div>
     </div>
 
     <div id="modal-add" class="hidden fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center">
@@ -100,11 +79,11 @@
             <div class="space-y-3 text-sm">
                 <div>
                     <label class="block text-xs text-gray-400 mb-1">英単語 / 記号</label>
-                    <input type="text" id="add-word" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white focus:outline-none focus:border-emerald-500" placeholder="example">
+                    <input type="text" id="add-word" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white focus:outline-none" placeholder="example">
                 </div>
                 <div>
                     <label class="block text-xs text-gray-400 mb-1">品詞・役割選択</label>
-                    <select id="add-pos" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white focus:outline-none focus:border-emerald-500">
+                    <select id="add-pos" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white focus:outline-none">
                         <option value="名詞">名詞 (青)</option>
                         <option value="代名詞">代名詞 (水色)</option>
                         <option value="形容詞">形容詞 (緑)</option>
@@ -125,29 +104,6 @@
         </div>
     </div>
 
-    <div id="context-menu" class="hidden absolute z-[200] bg-gray-800 border border-gray-700 rounded shadow-xl py-1 text-xs w-28">
-        <button id="btn-ctx-delete" class="w-full text-left px-3 py-1.5 hover:bg-red-600 text-red-200 transition">削除する</button>
-    </div>
-
-    <script>
-        console.log("[🛠️] LeaderLine外部スクリプトのロードを開始します...");
-        window.addEventListener('DOMContentLoaded', () => {
-            const script = document.createElement('script');
-            script.src = "https://cdn.jsdelivr.net/npm/leader-line-new@1.1.9/border-box.min.js"; 
-            script.onload = () => { 
-                window.LeaderLineScriptLoaded = true; 
-                console.log("[✅] LeaderLineスクリプトが正常に読み込まれました。");
-                if(window.initApp) window.initApp(); 
-            };
-            script.onerror = () => { 
-                window.LeaderLineScriptLoaded = false; 
-                console.error("[❌] LeaderLineの読み込みに失敗しました（ネットワークまたはブロックが原因）。接続線以外の機能で起動します。"); 
-                if(window.initApp) window.initApp(); 
-            };
-            document.head.appendChild(script);
-        });
-    </script>
-
     <script>
         const POS_COLORS = {
             "名詞": "bg-blue-600 border-blue-400 text-white", "代名詞": "bg-sky-500 border-sky-300 text-white",
@@ -161,437 +117,309 @@
         let csvDatabase = {};
         let history = [];
         let historyIndex = -1;
-        let zoom = 1.0;
-        let activeLineRenderers = {};
-        let selectedPort = null;
-        let rightClickedTargetId = null;
-        let mediaRecorder = null;
-        let recordedChunks = [];
+        let draggingObj = null;
+        let selectedTerminal = null;
 
-        const editorContainer = document.getElementById('editor-container');
-        const editorWorkspace = document.getElementById('editor-workspace');
+        const container = document.getElementById('editor-container');
+        const workspace = document.getElementById('editor-workspace');
+        const svg = document.getElementById('connections-svg');
         const genreSelect = document.getElementById('genre-select');
         const paletteContainer = document.getElementById('palette-container');
-        const zoomDisplay = document.getElementById('zoom-display');
         const saveCodeArea = document.getElementById('save-code-area');
-        const contextMenu = document.getElementById('context-menu');
 
         function utoa(str) { return btoa(unescape(encodeURIComponent(str))); }
         function atou(str) { return decodeURIComponent(escape(atob(str))); }
 
-        // --- アプリの初期起動シーケンス ---
-        window.initApp = async function() {
-            console.log("[🚀] アプリケーションの初期化シーケンス(initApp)を開始します。");
-            
+        // --- アプリの起動 ---
+        window.onload = async function() {
             setupEventListeners();
             loadFromLocalStorage();
-            
-            console.log("[📂] CSVファイルのロードフェーズに入ります。");
-            try {
-                await loadCSVFiles();
-            } catch (e) {
-                console.error("[❌] CSVロード内部で致命的エラーが発生しました:", e);
-            }
-
+            await loadCSVFiles();
             updateGenreDropdown();
             updatePalette();
             renderWorkspace();
             saveHistory();
-            console.log("[🎉] アプリの全初期化プロセスが完了しました。操作可能です。");
         };
 
-        // --- CSVファイルの非同期Fetch & 状況ロギング ---
-        async function loadCSVFiles() {
-            const csvFiles = ['csv1.csv', 'csv2.csv', 'csv3.csv'];
-            const basePath = './csv/'; 
-            console.log(`[📡] 計${csvFiles.length}件のCSV取得を試みます。パス： ${basePath}`);
-
-            for (const fileName of csvFiles) {
-                const targetUrl = basePath + fileName;
-                try {
-                    const response = await fetch(targetUrl);
-                    if (!response.ok) {
-                        console.warn(`[⚠️] ${fileName} がサーバーに見つかりません (ステータスコード: ${response.status})。URL: ${targetUrl}`);
-                        continue;
-                    }
-                    const text = await response.text();
-                    console.log(`[📥] ${fileName} のデータ取得に成功。パースを開始します...`);
-                    parseCSV(text, fileName);
-                } catch (e) {
-                    console.error(`[❌] ${fileName} の取得中に通信エラーが発生。ローカル環境(file://)のセキュリティ制限、またはサーバー未起動の可能性があります。エラー詳細:`, e);
-                }
-            }
+        // --- 履歴管理システム ---
+        function saveHistory() {
+            const current = JSON.stringify({ components: state.components, wires: state.wires });
+            if (historyIndex >= 0 && history[historyIndex] === current) return;
+            history = history.slice(0, historyIndex + 1);
+            history.push(current);
+            if (history.length > 50) history.shift(); else historyIndex++;
+            updateUndoRedoButtons();
         }
 
-        function parseCSV(text, fileName) {
-            const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
-            if (lines.length === 0) {
-                console.warn(`[⚠️] ${fileName} は中身が空、または解析可能な行がありません。`);
-                return;
-            }
-            const firstLine = lines[0].split(',');
-            const genreName = firstLine[0];
-            console.log(`[📊] CSVヘッダー検知: ジャンル名=[${genreName}]`);
+        function undo() {
+            if (historyIndex > 0) { historyIndex--; applyState(JSON.parse(history[historyIndex])); }
+        }
 
-            if(!csvDatabase[genreName]) csvDatabase[genreName] = [];
-            let count = 0;
-            for (let i = 1; i < lines.length; i++) {
-                const parts = lines[i].split(',');
-                if (parts.length >= 2) {
-                    csvDatabase[genreName].push({ value: parts[0].trim(), text: parts[1].trim() });
-                    count++;
-                }
+        function redo() {
+            if (historyIndex < history.length - 1) { historyIndex++; applyState(JSON.parse(history[historyIndex])); }
+        }
+
+        function applyState(snap) {
+            state.components = snap.components.map(c => ({ ...c }));
+            state.wires = snap.wires.map(w => ({ ...w }));
+            renderWorkspace();
+            updateUndoRedoButtons();
+        }
+
+        function updateUndoRedoButtons() {
+            document.getElementById('btn-undo').disabled = historyIndex <= 0;
+            document.getElementById('btn-redo').disabled = historyIndex >= history.length - 1;
+        }
+
+        // --- CSVデータ処理 ---
+        async function loadCSVFiles() {
+            const csvFiles = ['csv1.csv', 'csv2.csv', 'csv3.csv'];
+            for (const name of csvFiles) {
+                try {
+                    const res = await fetch('./csv/' + name);
+                    if (!res.ok) continue;
+                    const text = await res.text();
+                    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+                    if (lines.length === 0) continue;
+                    const genreName = lines[0].split(',')[0];
+                    if (!csvDatabase[genreName]) csvDatabase[genreName] = [];
+                    for (let i = 1; i < lines.length; i++) {
+                        const p = lines[i].split(',');
+                        if (p.length >= 2) csvDatabase[genreName].push({ value: p[0].trim(), text: p[1].trim() });
+                    }
+                } catch (e) { console.warn(name + " のFetch制限をスキップしました"); }
             }
-            console.log(`[✅] ${fileName} から ${count} 個の単語を [${genreName}] に登録しました。`);
         }
 
         function updateGenreDropdown() {
             genreSelect.innerHTML = '<option value="myblocks">マイブロック</option>';
-            const genres = Object.keys(csvDatabase);
-            genres.forEach(genre => {
+            Object.keys(csvDatabase).forEach(g => {
                 const opt = document.createElement('option');
-                opt.value = genre; opt.textContent = genre;
+                opt.value = g; opt.textContent = g;
                 genreSelect.appendChild(opt);
             });
-            genreSelect.value = genres.length > 0 ? genres[0] : 'myblocks';
-            console.log(`[🔄] ドロップダウン項目を更新。現在の選択ジャンル: ${genreSelect.value}`);
+            const keys = Object.keys(csvDatabase);
+            genreSelect.value = keys.length > 0 ? keys[0] : 'myblocks';
         }
 
         function updatePalette() {
             paletteContainer.innerHTML = '';
-            const selectedGenre = genreSelect.value;
-            const blocks = (selectedGenre === 'myblocks') ? state.myBlocks : (csvDatabase[selectedGenre] || []);
-            console.log(`[🎨] パレット描画: ジャンル [${selectedGenre}] から ${blocks ? blocks.length : 0} 個の要素を出力します。`);
-
-            if(!blocks || blocks.length === 0) {
-                paletteContainer.innerHTML = `<div class="text-xs text-gray-500 p-3 text-center">ブロックがありません</div>`;
+            const g = genreSelect.value;
+            const blocks = (g === 'myblocks') ? state.myBlocks : (csvDatabase[g] || []);
+            if (blocks.length === 0) {
+                paletteContainer.innerHTML = `<div class="text-xs text-gray-500 p-2 text-center">ブロックがありません</div>`;
                 return;
             }
-
             blocks.forEach(b => {
                 const el = document.createElement('div');
-                el.className = `p-2 rounded border text-xs font-bold cursor-grab shadow select-none ${POS_COLORS[b.value] || POS_COLORS['その他']}`;
-                el.textContent = `${b.text} (${b.value})`;
+                el.className = `p-2 rounded border text-xs font-bold cursor-grab shadow ${POS_COLORS[b.value] || POS_COLORS['その他']}`;
+                el.textContent = `${b.text} [${b.value}]`;
                 el.draggable = true;
-                el.addEventListener('dragstart', (e) => {
-                    console.log(`[🫳] ブロックのドラッグを開始しました: ${b.text}`);
-                    e.dataTransfer.setData('text/plain', JSON.stringify(b));
-                });
+                el.ondragstart = (e) => e.dataTransfer.setData('blockStr', JSON.stringify(b));
                 paletteContainer.appendChild(el);
             });
         }
 
+        // --- ワークスペースの動的描画 ---
         function renderWorkspace() {
-            console.log("[🖥️] ワークスペースを再レンダリングします。現在のブロック数:", state.components.length, "ワイヤー数:", state.wires.length);
-            if(window.LeaderLineScriptLoaded && window.LeaderLine) {
-                Object.values(activeLineRenderers).forEach(line => { try{ line.remove(); }catch(e){} });
-            }
-            activeLineRenderers = {};
-            editorWorkspace.innerHTML = '';
-
+            workspace.innerHTML = '';
             state.components.forEach(c => {
-                const isTerminal = ["終末ブロック", "ピリオド", "クエスチョンマーク", "エクスクラメーションマーク"].includes(c.value) || [".", "?", "!"].includes(c.text);
+                const isTerminal = ["終末ブロック", "." , "?" , "!"].includes(c.value) || [".", "?", "!"].includes(c.text);
                 const blockEl = document.createElement('div');
                 blockEl.id = c.id;
-                blockEl.style.left = `${c.x}px`;
-                blockEl.style.top = `${c.y}px`;
-                blockEl.className = `absolute flex items-center justify-between px-2 py-1.5 rounded-lg border shadow-lg font-bold text-sm min-w-[90px] cursor-move ${POS_COLORS[c.value] || POS_COLORS['その他']}`;
+                blockEl.style.left = c.x + 'px'; blockEl.style.top = c.y + 'px';
+                blockEl.className = `absolute flex items-center justify-between px-3 py-2 rounded-lg border shadow-lg font-bold text-sm min-w-[100px] cursor-move ${POS_COLORS[c.value] || POS_COLORS['その他']}`;
                 
+                // 左側受信用（A端子）
                 const portA = document.createElement('div');
-                portA.dataset.port = 'A';
-                portA.className = "port absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white border-2 border-gray-800 cursor-pointer z-10 shadow";
+                portA.className = "terminal port-a";
+                portA.onclick = (e) => { e.stopPropagation(); handleConnect(c.id, 'A', portA); };
                 blockEl.appendChild(portA);
 
-                const label = document.createElement('span');
-                label.className = "mx-auto px-2 pointer-events-none select-none text-center w-full";
-                label.textContent = c.text;
-                blockEl.appendChild(label);
+                const txt = document.createElement('span');
+                txt.className = "mx-auto pointer-events-none";
+                txt.textContent = c.text;
+                blockEl.appendChild(txt);
 
+                // 右側送信用（B端子：終末ブロック以外に設置）
                 if (!isTerminal) {
                     const portB = document.createElement('div');
-                    portB.dataset.port = 'B';
-                    portB.className = "port absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-gray-900 border-2 border-white cursor-pointer z-10 shadow";
+                    portB.className = "terminal port-b";
+                    portB.onclick = (e) => { e.stopPropagation(); handleConnect(c.id, 'B', portB); };
                     blockEl.appendChild(portB);
                 }
 
-                setupBlockDrag(blockEl, c);
-                
-                blockEl.addEventListener('contextmenu', (e) => {
-                    e.preventDefault(); rightClickedTargetId = c.id;
-                    contextMenu.style.left = `${e.clientX}px`; contextMenu.style.top = `${e.clientY}px`;
-                    contextMenu.classList.remove('hidden');
-                });
-
-                blockEl.querySelectorAll('.port').forEach(portEl => {
-                    portEl.addEventListener('click', (e) => { e.stopPropagation(); handlePortClick(c.id, portEl.dataset.port, portEl); });
-                });
-
-                editorWorkspace.appendChild(blockEl);
-            });
-
-            setTimeout(() => {
-                if(!window.LeaderLineScriptLoaded || !window.LeaderLine) {
-                    console.warn("[⚠️] LeaderLineが読み込まれていないため、接続線の描画をスキップしました。");
-                    return;
-                }
-                state.wires.forEach(w => {
-                    const fromEl = document.getElementById(w.from.blockId)?.querySelector(`[data-port="${w.from.port}"]`);
-                    const toEl = document.getElementById(w.to.blockId)?.querySelector(`[data-port="${w.to.port}"]`);
-                    if(fromEl && toEl) {
-                        try {
-                            const line = new LeaderLine(fromEl, toEl, { color: '#38bdf8', size: 3, path: 'cubic', startSocket: 'right', endSocket: 'left' });
-                            const svgLineEl = document.querySelector(`.leader-line:last-of-type`);
-                            if (svgLineEl) {
-                                svgLineEl.addEventListener('click', () => {
-                                    console.log(`[✂️] 接続線がクリックされました。削除します。ID: ${w.id}`);
-                                    state.wires = state.wires.filter(item => item.id !== w.id);
-                                    line.remove(); saveHistory(); autoSaveToLocalStorage();
-                                });
-                            }
-                            activeLineRenderers[w.id] = line;
-                        } catch(err){ console.error("[❌] 線の描画中にエラー:", err); }
+                // Wクリックによる削除（提示コード互換）
+                blockEl.onmousedown = (e) => {
+                    if (e.target.classList.contains('terminal')) return;
+                    const now = Date.now();
+                    if (now - c.lastClick < 300) {
+                        state.components = state.components.filter(item => item.id !== c.id);
+                        state.wires = state.wires.filter(w => w.fromId !== c.id && w.toId !== c.id);
+                        saveHistory(); renderWorkspace(); draggingObj = null; return;
                     }
-                });
-            }, 60);
+                    c.lastClick = now;
+                    draggingObj = c;
+                };
+
+                workspace.appendChild(blockEl);
+            });
+            drawWires();
         }
 
-        function setupBlockDrag(el, componentData) {
-            let startX = 0, startY = 0;
-            el.addEventListener('mousedown', (e) => {
-                if(e.target.classList.contains('port') || e.button !== 0) return;
-                e.preventDefault();
-                startX = e.clientX; startY = e.clientY;
-                console.log(`[🖱️] ブロックのドラッグ移動を開始しました: ID=${componentData.id}`);
-                
-                const onMouseMove = (moveEvent) => {
-                    const dx = (moveEvent.clientX - startX) / zoom;
-                    const dy = (moveEvent.clientY - startY) / zoom;
-                    componentData.x += dx; componentData.y += dy;
-                    el.style.left = `${componentData.x}px`; el.style.top = `${componentData.y}px`;
-                    startX = moveEvent.clientX; startY = moveEvent.clientY;
-                    if(window.LeaderLineScriptLoaded && window.LeaderLine) {
-                        Object.values(activeLineRenderers).forEach(line => { try{ line.position(); }catch(ex){} });
-                    }
+        // --- 接続線の描画（提示シミュレータの最速軽量SVGロジック） ---
+        function drawWires() {
+            svg.innerHTML = '';
+            const rect = container.getBoundingClientRect();
+            state.wires.forEach((w, idx) => {
+                const fEl = document.getElementById(w.fromId)?.querySelector('.port-b');
+                const tEl = document.getElementById(w.toId)?.querySelector('.port-a');
+                if (!fEl || !tEl) return;
+
+                const r1 = fEl.getBoundingClientRect();
+                const r2 = tEl.getBoundingClientRect();
+
+                const x1 = r1.left - rect.left + 6; const y1 = r1.top - rect.top + 6;
+                const x2 = r2.left - rect.left + 6; const y2 = r2.top - rect.top + 6;
+
+                // 綺麗なクランク・ベジェを描く直角 polyline 補間計算
+                const midX = x1 + (x2 - x1) / 2;
+                const points = `${x1},${y1} ${midX},${y1} ${midX},${y2} ${x2},${y2}`;
+
+                const poly = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+                poly.setAttribute("points", points);
+                poly.setAttribute("class", "wire");
+                // クリックで配線削除
+                poly.onclick = (e) => {
+                    e.stopPropagation();
+                    state.wires.splice(idx, 1);
+                    saveHistory();
+                    renderWorkspace();
                 };
-                const onMouseUp = () => {
-                    console.log(`[📍] ブロックの移動が確定しました。位置 X:${Math.round(componentData.x)} Y:${Math.round(componentData.y)}`);
-                    document.removeEventListener('mousemove', onMouseMove);
-                    document.removeEventListener('mouseup', onMouseUp);
-                    saveHistory(); autoSaveToLocalStorage();
-                };
-                document.addEventListener('mousemove', onMouseMove);
-                document.addEventListener('mouseup', onMouseUp);
+                svg.appendChild(poly);
             });
         }
 
-        function handlePortClick(blockId, portType, element) {
-            if (!selectedPort) {
-                selectedPort = { blockId, port: portType, element };
-                element.classList.add('animate-ping');
-                console.log(`[🔌] 接続の1つ目の端子が選択されました: ブロックID=${blockId}, 端子=${portType}`);
+        // --- 端子接続ロジック ---
+        function handleConnect(compId, termName, element) {
+            if (!selectedTerminal) {
+                selectedTerminal = { id: compId, term: termName, el: element };
+                element.classList.add('selected');
             } else {
-                selectedPort.element.classList.remove('animate-ping');
-                const p1 = selectedPort; const p2 = { blockId, port: portType, element };
-                selectedPort = null;
-                
-                console.log(`[🔌] 2つ目の端子が選択されました: ブロックID=${blockId}, 端子=${portType}`);
+                const t1 = selectedTerminal;
+                // B端子（出力）からA端子（入力）への接続のみ許可
+                if ((t1.term === 'B' && termName === 'A') || (t1.term === 'A' && termName === 'B')) {
+                    const fromNode = t1.term === 'B' ? t1 : { id: compId, term: termName };
+                    const toNode = t1.term === 'A' ? t1 : { id: compId, term: termName };
 
-                if (p1.port === p2.port) {
-                    console.warn("[⚠️ 接続拒否] 同じ属性の端子（A同士、またはB同士）は接続できません。");
-                    return;
+                    if (fromNode.id !== toNode.id) {
+                        // 既存の同一ターゲット入力を上書き除去
+                        state.wires = state.wires.filter(w => !(w.toId === toNode.id));
+                        state.wires.push({ fromId: fromNode.id, toId: toNode.id });
+                        saveHistory();
+                    }
                 }
-                if (p1.blockId === p2.blockId) {
-                    console.warn("[⚠️ 接続拒否] 同一ブロック内での自己接続はできません。");
-                    return;
-                }
-                
-                const fromNode = p1.port === 'B' ? p1 : p2;
-                const toNode = p1.port === 'A' ? p1 : p2;
-                
-                state.wires.push({
-                    id: 'wire_' + Date.now(),
-                    from: { blockId: fromNode.blockId, port: fromNode.port },
-                    to: { blockId: toNode.blockId, port: toNode.port }
-                });
-                console.log("[✅] 新しい接続線(Wire)を登録しました。");
-                renderWorkspace(); saveHistory(); autoSaveToLocalStorage();
+                t1.el.classList.remove('selected');
+                selectedTerminal = null;
+                renderWorkspace();
             }
         }
 
+        // --- イベントバインド ---
         function setupEventListeners() {
-            console.log("[🛠️] 各種ボタンのイベントリスナーを登録します。");
-            genreSelect.addEventListener('change', () => {
-                console.log(`[🔄] ジャンルが変更されました: ${genreSelect.value}`);
-                updatePalette();
-            });
+            genreSelect.onchange = updatePalette;
 
-            editorContainer.addEventListener('dragover', (e) => e.preventDefault());
-            editorContainer.addEventListener('drop', (e) => {
+            container.ondragover = e => e.preventDefault();
+            container.ondrop = e => {
                 e.preventDefault();
                 try {
-                    const blockData = JSON.parse(e.dataTransfer.getData('text/plain'));
-                    const rect = editorWorkspace.getBoundingClientRect();
-                    const newId = 'block_' + Date.now() + Math.random().toString(36).substr(2,3);
+                    const block = JSON.parse(e.dataTransfer.getData('blockStr'));
+                    const rect = workspace.getBoundingClientRect();
                     state.components.push({
-                        id: newId,
-                        type: 'word', x: (e.clientX - rect.left) / zoom - 45, y: (e.clientY - rect.top) / zoom - 20,
-                        text: blockData.text, value: blockData.value
+                        id: 'b' + Date.now() + Math.random().toString(36).substr(2, 4),
+                        text: block.text, value: block.value,
+                        x: e.clientX - rect.left - 50, y: e.clientY - rect.top - 20, lastClick: 0
                     });
-                    console.log(`[📥] エディタへ新ブロックをドロップ配置しました: ID=${newId}, 単語=${blockData.text}`);
-                    renderWorkspace(); saveHistory(); autoSaveToLocalStorage();
-                } catch(err){ console.error("[❌] ドロップ処理でエラー:", err); }
-            });
+                    saveHistory(); renderWorkspace();
+                } catch(err){}
+            };
 
-            document.getElementById('btn-zoom-in').addEventListener('click', () => { if(zoom < 2.0) { zoom += 0.1; applyZoom(); } });
-            document.getElementById('btn-zoom-out').addEventListener('click', () => { if(zoom > 0.5) { zoom -= 0.1; applyZoom(); } });
-            document.addEventListener('click', () => contextMenu.classList.add('hidden'));
-            
-            document.getElementById('btn-ctx-delete').addEventListener('click', () => {
-                if(rightClickedTargetId) {
-                    console.log(`[🗑️] 右クリックメニューからブロックを削除します: ID=${rightClickedTargetId}`);
-                    state.wires = state.wires.filter(w => w.from.blockId !== rightClickedTargetId && w.to.blockId !== rightClickedTargetId);
-                    state.components = state.components.filter(c => c.id !== rightClickedTargetId);
-                    rightClickedTargetId = null;
-                    renderWorkspace(); saveHistory(); autoSaveToLocalStorage();
+            // ドラッグ移動制御
+            window.onmousemove = e => {
+                if (draggingObj) {
+                    draggingObj.x += e.movementX; draggingObj.y += e.movementY;
+                    const el = document.getElementById(draggingObj.id);
+                    if (el) { el.style.left = draggingObj.x + 'px'; el.style.top = draggingObj.y + 'px'; drawWires(); }
                 }
-            });
+            };
+            window.onmouseup = () => { if (draggingObj) saveHistory(); draggingObj = null; };
 
-            // ブロック追加処理
-            document.getElementById('btn-create-block').addEventListener('click', () => {
-                const word = document.getElementById('add-word').value.trim();
-                const pos = document.getElementById('add-pos').value;
-                console.log(`[➕] カスタムブロック追加要求: 単語=[${word}], 品詞=[${pos}]`);
-                if(!word) {
-                    console.warn("[⚠️] 単語が空欄のため追加を中止しました。");
-                    return alert("文字を入力してください");
+            // ショートカットキー設定
+            window.onkeydown = e => {
+                if (e.ctrlKey || e.metaKey) {
+                    if (e.key === 'z') { e.preventDefault(); undo(); }
+                    if (e.key === 'y') { e.preventDefault(); redo(); }
                 }
-                state.myBlocks.push({ text: word, value: pos });
+            };
+
+            // 各種コントロールボタン
+            document.getElementById('btn-undo').onclick = undo;
+            document.getElementById('btn-redo').onclick = redo;
+            document.getElementById('btn-save').onclick = () => { autoSaveToLocalStorage(); alert("保存しました"); };
+            document.getElementById('btn-reset').onclick = () => {
+                if(confirm("全配置オブジェクトをリセットしますか？")) {
+                    state.components = []; state.wires = []; saveHistory(); renderWorkspace();
+                }
+            };
+
+            // ブロック追加
+            document.getElementById('btn-open-add').onclick = () => document.getElementById('modal-add').classList.remove('hidden');
+            document.getElementById('btn-close-add').onclick = () => document.getElementById('modal-add').classList.add('hidden');
+            document.getElementById('btn-create-block').onclick = () => {
+                const t = document.getElementById('add-word').value.trim();
+                const v = document.getElementById('add-pos').value;
+                if(!t) return alert("テキストを入力してください");
+                state.myBlocks.push({ text: t, value: v });
                 autoSaveToLocalStorage();
                 genreSelect.value = 'myblocks';
                 updatePalette();
                 document.getElementById('add-word').value = '';
                 document.getElementById('modal-add').classList.add('hidden');
-                console.log(`[✅] マイブロックへの追加が完了しました。`);
-            });
+            };
 
-            // 書き出し・読み込み
-            document.getElementById('btn-export').addEventListener('click', () => {
-                console.log("[📤] 現在のエディタ状態をBase64にエクスポートします。");
-                const data = { components: state.components, wires: state.wires };
-                const encoded = utoa(JSON.stringify(data));
-                saveCodeArea.value = encoded;
-                console.log("[✅] エクスポート完了。文字列長:", encoded.length);
-            });
-            
-            document.getElementById('btn-import').addEventListener('click', () => {
-                console.log("[📥] 入力データからのインポート（デコード）を試みます。");
+            // Base64コード変換
+            document.getElementById('btn-export').onclick = () => {
+                const raw = JSON.stringify({ components: state.components, wires: state.wires });
+                saveCodeArea.value = utoa(raw);
+            };
+            document.getElementById('btn-import').onclick = () => {
                 try {
-                    const rawInput = saveCodeArea.value.trim();
-                    if(!rawInput) { console.warn("[⚠️] データが空です。"); return; }
-                    const data = JSON.parse(atou(rawInput));
-                    state.components = data.components || []; state.wires = data.wires || [];
-                    console.log("[✅] デコード成功。コンポーネント:", state.components.length, "ワイヤー:", state.wires.length);
-                    renderWorkspace(); saveHistory(); autoSaveToLocalStorage();
-                } catch(e) { 
-                    console.error("[❌] インポートに失敗。文字列が壊れているかBase64の形式ではありません:", e);
-                    alert("データが正しくありません"); 
-                }
-            });
+                    const snap = JSON.parse(atou(saveCodeArea.value.trim()));
+                    applyState(snap); saveHistory();
+                } catch(e) { alert("不正なコードです。データの展開に失敗しました。"); }
+            };
 
-            document.getElementById('btn-save').addEventListener('click', () => { autoSaveToLocalStorage(); alert("保存しました"); });
-            document.getElementById('btn-undo').addEventListener('click', () => { if(historyIndex > 0) { historyIndex--; console.log(`[⏪] Undo実行: 履歴位置 ${historyIndex}`); loadStateStr(history[historyIndex]); } });
-            document.getElementById('btn-redo').addEventListener('click', () => { if(historyIndex < history.length - 1) { historyIndex++; console.log(`[⏩] Redo実行: 履歴位置 ${historyIndex}`); loadStateStr(history[historyIndex]); } });
-
-            // スクショ
-            document.getElementById('btn-start-media').addEventListener('click', () => {
-                document.getElementById('modal-media').classList.add('hidden');
-                const type = document.querySelector('input[name="media-type"]:checked').value;
-                const range = document.getElementById('media-range').value;
-                const targetEl = (range === 'editor') ? editorContainer : document.body;
-                console.log(`[📷] キャプチャ開始要求: モード=[${type}], 範囲=[${range}]`);
-
-                if (type === 'screenshot') {
-                    html2canvas(targetEl, { backgroundColor: '#030712' }).then(canvas => {
-                        const link = document.createElement('a');
-                        link.download = `screenshot_${Date.now()}.png`;
-                        link.href = canvas.toDataURL(); link.click();
-                        console.log("[✅] スクリーンショット画像が正常に生成・ダウンロードされました。");
-                    }).catch(err => {
-                        console.error("[❌] スクリーンショット生成エラー（html2canvas内部の失敗）:", err);
-                    });
-                } else {
-                    startRecording();
-                }
-            });
-            document.getElementById('btn-stop-record').addEventListener('click', stopRecording);
-        }
-
-        function applyZoom() {
-            editorWorkspace.style.transform = `scale(${zoom})`;
-            zoomDisplay.textContent = `${Math.round(zoom * 100)}%`;
-            if(window.LeaderLineScriptLoaded && window.LeaderLine) {
-                Object.values(activeLineRenderers).forEach(line => { try{ line.position(); }catch(e){} });
-            }
-        }
-
-        function saveHistory() {
-            const snap = JSON.stringify({ components: state.components, wires: state.wires });
-            if (historyIndex >= 0 && history[historyIndex] === snap) return;
-            history = history.slice(0, historyIndex + 1); history.push(snap); historyIndex++;
-        }
-
-        function loadStateStr(str) {
-            const data = JSON.parse(str);
-            state.components = data.components || []; state.wires = data.wires || [];
-            renderWorkspace(); autoSaveToLocalStorage();
+            // キャプチャ(html2canvas)
+            document.getElementById('btn-open-media').onclick = async () => {
+                const btn = document.getElementById('btn-open-media');
+                btn.innerText = "PROCESSING...";
+                const canvas = await html2canvas(container, { backgroundColor: '#030712', scale: 2 });
+                const link = document.createElement('a');
+                link.download = `lingoblock-${Date.now()}.png`; link.href = canvas.toDataURL(); link.click();
+                btn.innerText = "IMAGE CAPTURE";
+            };
         }
 
         function autoSaveToLocalStorage() {
-            try {
-                localStorage.setItem('eng_editor_workspace', JSON.stringify({ components: state.components, wires: state.wires }));
-                localStorage.setItem('eng_editor_myblocks', JSON.stringify(state.myBlocks));
-            } catch(e) {
-                console.error("[❌] LocalStorageへの保存に失敗しました(クォータ制限など):", e);
-            }
+            localStorage.setItem('lingo_workspace', JSON.stringify({ components: state.components, wires: state.wires }));
+            localStorage.setItem('lingo_myblocks', JSON.stringify(state.myBlocks));
         }
 
         function loadFromLocalStorage() {
-            console.log("[📂] LocalStorageからの自動復元を試みます。");
-            const wData = localStorage.getItem('eng_editor_workspace');
-            const mData = localStorage.getItem('eng_editor_myblocks');
-            if (wData) { const p = JSON.parse(wData); state.components = p.components || []; state.wires = p.wires || []; console.log(` -> ワークスペース復元完了: ブロック数 ${state.components.length}`); }
-            if (mData) { state.myBlocks = JSON.parse(mData); console.log(` -> マイブロック復元完了: 登録数 ${state.myBlocks.length}`); }
-        }
-
-        async function startRecording() {
-            recordedChunks = [];
-            console.log("[📹] 画面録画セッションを開始します。メディアデバイスの承認を待機中...");
-            try {
-                const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-                mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
-                mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
-                mediaRecorder.onstop = () => {
-                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
-                    const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
-                    link.download = `record_${Date.now()}.webm`; link.click();
-                    stream.getTracks().forEach(t => t.stop());
-                    document.getElementById('btn-stop-record').classList.add('hidden');
-                    console.log("[✅] 録画ファイルが正常に保存されました。");
-                };
-                mediaRecorder.start();
-                document.getElementById('btn-stop-record').classList.remove('hidden');
-                console.log("[🟢] 録画中...");
-            } catch (err) { 
-                console.error("[❌] 画面録画の開始に失敗しました。ユーザーキャンセル、または未対応ブラウザです:", err);
-                alert("録画を開始できませんでした。"); 
-            }
-        }
-
-        function stopRecording() { 
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                console.log("[🛑] 録画の停止を要求しました。");
-                mediaRecorder.stop(); 
-            } 
+            const w = localStorage.getItem('lingo_workspace');
+            const m = localStorage.getItem('lingo_myblocks');
+            if (w) { const p = JSON.parse(w); state.components = p.components || []; state.wires = p.wires || []; }
+            if (m) state.myBlocks = JSON.parse(m);
         }
     </script>
 </body>
