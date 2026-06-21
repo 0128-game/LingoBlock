@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
-        body { user-select: none; }
+body { user-select: none; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
@@ -22,8 +22,10 @@
             font-size: 0.875rem;
             cursor: move;
             z-index: 20;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
-            border: 2px solid rgba(255, 255, 255, 0.15);
+            /* 影を黒ベースから、ライトテーマに馴染む柔らかい薄い影に変更 */
+            box-shadow: 0 4px 10px -1px rgba(0, 0, 0, 0.08);
+            /* 白背景に対して境界が引き締まるよう、少し不透明度を上げた白枠に変更 */
+            border: 2px solid rgba(255, 255, 255, 0.4);
         }
 
         /* 結合状態に応じた角丸の制御 */
@@ -36,14 +38,18 @@
         .joint-left::after, .joint-middle::after {
             content: ''; position: absolute; right: -6px; top: 12px;
             width: 12px; height: 16px; background: inherit;
-            border: 2px solid rgba(255, 255, 255, 0.15); border-left: none;
+            /* ブロックの枠線と透過度を一致 */
+            border: 2px solid rgba(255, 255, 255, 0.4); border-left: none;
             border-radius: 0 4px 4px 0; z-index: 30;
         }
         /* ジョイント部分の凹（左側） */
         .joint-right::before, .joint-middle::before {
             content: ''; position: absolute; left: -2px; top: 12px;
-            width: 6px; height: 16px; background: #0b0f19; /* ワークスペース背景色と同化 */
-            border: 2px solid rgba(255, 255, 255, 0.15); border-left: none;
+            width: 6px; height: 16px; 
+            /* 【重要】元の暗い色（#0b0f19）から、新しいアプリの明るい背景色（#f8fafc）に同化！ */
+            background: #f8fafc; 
+            /* ブロックの枠線と透過度を一致 */
+            border: 2px solid rgba(255, 255, 255, 0.4); border-left: none;
             border-radius: 0 4px 4px 0; z-index: 25;
         }
     </style>
