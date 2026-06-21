@@ -258,50 +258,66 @@
             });
         }
 
-// --- ドッキング位置の判定・押し出し（完全対称・距離均等版） ---
-        function handleSnapping(dragged) {
-            let snapTarget = null;
-            let minDistance = 50; // AからでもBからでも、この50pxの距離で均等に反応します
+// --- ご提示いただいた条件通りの結合ロジック ---
+        function handleSnapping(p) {
+            let q = null;
+            let minDistance = 60; // 結合判定を行うx方向の最大距離(px)
 
+            // 1. pにx方向で最も近く、y座標の誤差があまりないブロック(q)を探す
             state.components.forEach(c => {
-                if (c.id === dragged.id) return;
+                if (c.id === p.id) return;
 
-                // 上下のズレが少ないかチェック
-                const dY = Math.abs(dragged.y - c.y);
-                if (dY < 30) {
+                const dY = Math.abs(p.y - c.y);
+                if (dY < 30) { // y座標の誤差があまりない（30px以内）
                     
-                    // 【パターン1】c の「右側」に dragged を結合したいとき
-                    // （c の右端 と dragged の左端 の距離）
-                    const distToRight = Math.abs(dragged.x - (c.x + c.width));
-                    if (distToRight < minDistance) {
-                        minDistance = distToRight;
-                        snapTarget = { mode: 'after', target: c, x: c.x + c.width, y: c.y };
-                    }
-                    
-                    // 【パターン2】c の「左側」に dragged を結合したいとき
-                    // （c の左端 と dragged の右端 の距離） ← ここを dragged.x + dragged.width に修正！
-                    const distToLeft = Math.abs((dragged.x + dragged.width) - c.x);
-                    if (distToLeft < minDistance) {
-                        minDistance = distToLeft;
-                        snapTarget = { mode: 'before', target: c, x: c.x - dragged.width, y: c.y };
+                    // pの左端・右端のどちらからでも、cとの一番近い「x方向の距離」を測る
+                    const distToLeft = Math.abs((p.x + p.width) - c.x);
+                    const distToRight = Math.abs(p.x - (c.x + c.width));
+                    const currentDist = Math.min(distToLeft, distToRight);
+
+                    if (currentDist < minDistance) {
+                        minDistance = currentDist;
+                        q = c; // 結合対象を更新
                     }
                 }
             });
 
-            if (snapTarget) {
-                const pushWidth = dragged.width;
-                const targetX = snapTarget.x;
-                
-                // 挿入位置より右側にあるブロックをまとめて右に弾く
-                state.components.forEach(c => {
-                    if (c.id !== dragged.id && Math.abs(c.y - snapTarget.y) < 15 && c.x >= targetX - 2) {
-                        c.x += pushWidth;
-                    }
-                });
+            // 2. もし結合対象(q)が見つかったら、位置関係に応じて結合する
+            if (q) {
+                // qおよび「qとすでに結合して右側に連なっているブロック」を一時的に退避するための移動幅
+                const shiftWidth = p.width; 
 
-                dragged.x = snapTarget.x;
-                dragged.y = snapTarget.y;
+                if (p.x < q.x) {
+                    // 【条件】もしpがqより左にあるなら、pqの順番で結合する
+                    
+                    // qより右側（q自身を含む）にあるブロックを、pの横幅分だけ右にズラして隙間を作る
+                    state.components.forEach(c => {
+                        if (c.id !== p.id && Math.abs(c.y - q.y) < 15 && c.x >= q.x - 2) {
+                            c.x += shiftWidth;
+                        }
+                    });
+
+                    // pの座標をqの元の位置（押し出す前のqの左端）にピタッと合わせる
+                    p.x = q.x - shiftWidth;
+                    p.y = q.y;
+
+                } else {
+                    // 【条件】もしqがpより左にあるなら、qpの順番で結合する
+                    
+                    // qのすぐ右隣（q.x + q.width）に元々あったブロック群を、pの横幅分だけ右にズラして隙間を作る
+                    const insertX = q.x + q.width;
+                    state.components.forEach(c => {
+                        if (c.id !== p.id && Math.abs(c.y - q.y) < 15 && c.x >= insertX - 2) {
+                            c.x += shiftWidth;
+                        }
+                    });
+
+                    // pの座標をqのすぐ右隣にピタッと合わせる
+                    p.x = insertX;
+                    p.y = q.y;
+                }
             }
+            // 結合しないならそのまま（何もしない）
         }
 
         function setupEventListeners() {
