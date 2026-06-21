@@ -258,24 +258,28 @@
             });
         }
 
-        // --- ドッキング位置の判定・押し出し（手を離した時に1度だけ安全に実行） ---
+// --- ドッキング位置の判定・押し出し（完全対称・距離均等版） ---
         function handleSnapping(dragged) {
             let snapTarget = null;
-            let minDistance = 50; 
+            let minDistance = 50; // AからでもBからでも、この50pxの距離で均等に反応します
 
             state.components.forEach(c => {
                 if (c.id === dragged.id) return;
 
+                // 上下のズレが少ないかチェック
                 const dY = Math.abs(dragged.y - c.y);
                 if (dY < 30) {
-                    // パターン1: 他のブロックの【右側】に近づけた場合
+                    
+                    // 【パターン1】c の「右側」に dragged を結合したいとき
+                    // （c の右端 と dragged の左端 の距離）
                     const distToRight = Math.abs(dragged.x - (c.x + c.width));
                     if (distToRight < minDistance) {
                         minDistance = distToRight;
                         snapTarget = { mode: 'after', target: c, x: c.x + c.width, y: c.y };
                     }
                     
-                    // パターン2: 他のブロックの【左側】に近づけた場合
+                    // 【パターン2】c の「左側」に dragged を結合したいとき
+                    // （c の左端 と dragged の右端 の距離） ← ここを dragged.x + dragged.width に修正！
                     const distToLeft = Math.abs((dragged.x + dragged.width) - c.x);
                     if (distToLeft < minDistance) {
                         minDistance = distToLeft;
@@ -288,7 +292,7 @@
                 const pushWidth = dragged.width;
                 const targetX = snapTarget.x;
                 
-                // ドラッグ中ではなく、ここで初めて右側のブロック群を押し出す
+                // 挿入位置より右側にあるブロックをまとめて右に弾く
                 state.components.forEach(c => {
                     if (c.id !== dragged.id && Math.abs(c.y - snapTarget.y) < 15 && c.x >= targetX - 2) {
                         c.x += pushWidth;
