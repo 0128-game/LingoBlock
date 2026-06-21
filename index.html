@@ -252,6 +252,61 @@
                 };
                 workspace.appendChild(blockEl);
             });
+        }// --- ワークスペースの描画（結合状態の可視化版） ---
+        function renderWorkspace() {
+            workspace.innerHTML = '';
+            
+            state.components.forEach(c => {
+                const targetEl = document.getElementById(c.id);
+                // 自身のブロックサイズ（未描画時はデフォルト100pxとする）
+                const myWidth = targetEl ? targetEl.offsetWidth : 100;
+
+                // 左隣、右隣にピッタリくっついているブロックがあるか探す（判定幅: 10px以内）
+                const hasLeftNeighbor = state.components.some(other => 
+                    other.id !== c.id && 
+                    Math.abs(other.y - c.y) < 5 && 
+                    Math.abs((other.x + (document.getElementById(other.id)?.offsetWidth || 100) + 6) - c.x) < 10
+                );
+
+                const hasRightNeighbor = state.components.some(other => 
+                    other.id !== c.id && 
+                    Math.abs(other.y - c.y) < 5 && 
+                    Math.abs((c.x + myWidth + 6) - other.x) < 10
+                );
+
+                // 隣接状態に合わせて角の丸み（Tailwindクラス）を動的に切り替える
+                let borderRoundClass = "rounded-md"; // 通常（左右どこにもくっついていない）
+                if (hasLeftNeighbor && hasRightNeighbor) {
+                    borderRoundClass = "rounded-none"; // 両側がくっついている（真ん中のブロック）
+                } else if (hasLeftNeighbor) {
+                    borderRoundClass = "rounded-r-md rounded-l-none border-l-0"; // 左側だけ結合（右端のブロック）
+                } else if (hasRightNeighbor) {
+                    borderRoundClass = "rounded-l-md rounded-r-none border-r-0"; // 右側だけ結合（左端のブロック）
+                }
+
+                // ブロック要素の作成
+                const blockEl = document.createElement('div');
+                blockEl.id = c.id;
+                blockEl.style.left = c.x + 'px'; 
+                blockEl.style.top = c.y + 'px';
+                
+                // 動的な丸みクラスと、結合時に少し浮き出るような陰影(shadow)をブレンド
+                blockEl.className = `absolute flex items-center justify-center px-4 h-9 border shadow-md font-bold text-sm min-w-[70px] cursor-move transition-all duration-150 ${borderRoundClass} ${POS_COLORS[c.value] || POS_COLORS['その他']}`;
+                blockEl.textContent = c.text;
+
+                // Wクリックで削除
+                blockEl.onmousedown = (e) => {
+                    const now = Date.now();
+                    if (now - c.lastClick < 300) {
+                        state.components = state.components.filter(item => item.id !== c.id);
+                        saveHistory(); renderWorkspace(); draggingObj = null; return;
+                    }
+                    c.lastClick = now;
+                    draggingObj = c;
+                    workspace.appendChild(blockEl);
+                };
+                workspace.appendChild(blockEl);
+            });
         }
 // --- ドッキング位置のリアルタイム判定ロジック（強化版） ---
         function checkSnapPositions(draggedObj) {
