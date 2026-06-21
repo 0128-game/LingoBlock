@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LingoBlock - ライトテーマ完全版</title>
+    <title>LingoBlock</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
@@ -22,9 +22,7 @@
             font-size: 0.875rem;
             cursor: move;
             z-index: 20;
-            /* 影をライトテーマに馴染む柔らかい薄い影に変更 */
             box-shadow: 0 4px 10px -1px rgba(0, 0, 0, 0.08);
-            /* 白背景に対して境界が引き締まるよう、少し不透明度を上げた白枠に変更 */
             border: 2px solid rgba(255, 255, 255, 0.4);
         }
 
@@ -45,7 +43,6 @@
         .joint-right::before, .joint-middle::before {
             content: ''; position: absolute; left: -2px; top: 12px;
             width: 6px; height: 16px; 
-            /* 新しいアプリの明るい背景色（#f8fafc）に完全同化 */
             background: #f8fafc; 
             border: 2px solid rgba(255, 255, 255, 0.4); border-left: none;
             border-radius: 0 4px 4px 0; z-index: 25;
@@ -56,7 +53,7 @@
 
     <div class="flex flex-1 overflow-hidden relative">
         <aside class="w-80 bg-white border-r border-slate-200 flex flex-col p-4 z-50 overflow-y-auto no-scrollbar shadow-lg">
-            <h1 class="text-xl font-extrabold tracking-wider mb-4 text-center bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+            <h1 id="app-title" class="text-xl font-extrabold tracking-wider mb-4 text-center bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent cursor-pointer select-none">
                 LingoBlock
             </h1>
 
@@ -131,6 +128,10 @@
         let dragStartX = 0, dragStartY = 0;
         let initialRowBlocks = [];
 
+        // 🛠️ 追加: タイトル3回クリック用のカウンター管理
+        let titleClickCount = 0;
+        let titleClickTimer = null;
+
         const container = document.getElementById('editor-container');
         const workspace = document.getElementById('editor-workspace');
         const genreSelect = document.getElementById('genre-select');
@@ -150,14 +151,13 @@
             saveHistory();
         };
 
-        // 履歴保存と同時にストレージへの自動セーブを実行
         function saveHistory() {
             const current = JSON.stringify({ components: state.components });
             if (historyIndex >= 0 && history[historyIndex] === current) return;
             history = history.slice(0, historyIndex + 1).concat([current]);
             if (history.length > 50) history.shift(); else historyIndex++;
             updateUndoRedoButtons();
-            autoSaveToLocalStorage(); // 🛠️ 自動保存を組み込み
+            autoSaveToLocalStorage();
         }
         function undo() { if (historyIndex > 0) { historyIndex--; applyState(JSON.parse(history[historyIndex])); } }
         function redo() { if (historyIndex < history.length - 1) { historyIndex++; applyState(JSON.parse(history[historyIndex])); } }
@@ -209,7 +209,6 @@
                         const beforeLength = state.components.length;
                         state.components = state.components.filter(c => !(c.text === b.text && c.value === b.value));
                         
-                        // パレット側の削除とワークスペース側の削除、両方を自動保存に即時反映
                         autoSaveToLocalStorage();
                         if (state.components.length !== beforeLength) {
                             saveHistory();
@@ -276,7 +275,7 @@
                         else jointClass = "joint-middle";
                     }
 
-                    blockEl.className = `puzzle-block ${jointClass} ${POS_COLORS[block.value] || POS_COLORS['その他']}`;
+                    blockEl.className = `puzzle-block ${jointClass} ${POS_COLORS[block.value] || POS_COLORS['standard_color'] || POS_COLORS['その他']}`;
                     blockEl.textContent = block.text;
 
                     blockEl.onmousedown = (e) => {
@@ -399,7 +398,7 @@
                 if (draggingObj) {
                     handleSnapping(draggingObj); 
                     initialRowBlocks = [];
-                    saveHistory(); // ドラッグ移動完了時にも履歴更新＝ここでオートセーブが走る
+                    saveHistory(); 
                     renderWorkspace(); 
                     draggingObj = null;
                 }
@@ -409,6 +408,24 @@
                 if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
                 if ((e.ctrlKey || e.metaKey) && e.key === 'y') { e.preventDefault(); redo(); }
             };
+
+            // 🛠️ 追加: タイトル「LingoBlock」3回クリックの処理
+            document.getElementById('app-title').onclick = () => {
+                titleClickCount++;
+                
+                // 初回クリックから500ms以内に次のクリックがなければリセットするタイマー
+                clearTimeout(titleClickTimer);
+                titleClickTimer = setTimeout(() => {
+                    titleClickCount = 0;
+                }, 500);
+
+                // 3回連続クリック達成時
+                if (titleClickCount === 3) {
+                    titleClickCount = 0; // カウントリセット
+                    window.open('https://0128-game.github.io/Lingoblock-CSVmaker/', '_blank'); // 新規タブで起動
+                }
+            };
+
             document.getElementById('btn-undo').onclick = undo;
             document.getElementById('btn-redo').onclick = redo;
             document.getElementById('btn-reset').onclick = () => { if(confirm("リセットしますか？")) { state.components = []; saveHistory(); renderWorkspace(); } };
