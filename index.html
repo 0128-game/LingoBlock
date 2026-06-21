@@ -70,10 +70,6 @@
             <div class="grid grid-cols-2 gap-2 mb-4">
                 <button id="btn-undo" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs py-1.5 rounded font-semibold disabled:opacity-40">UNDO</button>
                 <button id="btn-redo" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs py-1.5 rounded font-semibold disabled:opacity-40">REDO</button>
-                <button id="btn-save" class="bg-[#3ecf8e] hover:opacity-90 text-white text-xs py-1.5 rounded font-bold col-span-2 shadow-sm shadow-emerald-100">ブラウザに保存</button>
-            </div>
-
-            <div class="grid grid-cols-2 gap-2 mb-4">
                 <button id="btn-open-media" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs py-1.5 rounded font-bold border border-indigo-200">IMAGE CAPTURE</button>
                 <button id="btn-open-add" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs py-1.5 rounded font-bold border border-emerald-200">ブロック追加</button>
             </div>
@@ -89,7 +85,7 @@
             </div>
 
             <div class="flex-1 border-t border-slate-100 pt-3 flex flex-col overflow-hidden">
-                <label class="block text-xs font-bold text-slate-500 mb-2">パレット (ドラッグして配置)</label>
+                <label class="block text-xs font-bold text-slate-500 mb-2">パレット (ドラッグして配置 / Wクリックでブロック抹消)</label>
                 <div id="palette-container" class="flex-1 overflow-y-auto space-y-2 p-1 bg-slate-50 rounded border border-slate-100 min-h-[150px]"></div>
             </div>
         </aside>
@@ -123,7 +119,7 @@
             "形容詞": "bg-emerald-500 text-white", "副詞": "bg-teal-600 text-white",
             "前置詞": "bg-orange-400 text-white", "助動詞": "bg-rose-500 text-white",
             "冠詞": "bg-amber-400 text-amber-950", "疑問詞": "bg-violet-500 text-white",
-            "終末ブロック": "bg-slate-400 text-white", "その他": "bg-slate-200 text-slate-800"
+            "終末ブロック": "bg-slate-400 text-white", "other": "bg-slate-200 text-slate-800", "その他": "bg-slate-200 text-slate-800"
         };
 
         let state = { components: [], myBlocks: [] };
@@ -154,16 +150,18 @@
             saveHistory();
         };
 
+        // 履歴保存と同時にストレージへの自動セーブを実行
         function saveHistory() {
             const current = JSON.stringify({ components: state.components });
             if (historyIndex >= 0 && history[historyIndex] === current) return;
             history = history.slice(0, historyIndex + 1).concat([current]);
             if (history.length > 50) history.shift(); else historyIndex++;
             updateUndoRedoButtons();
+            autoSaveToLocalStorage(); // 🛠️ 自動保存を組み込み
         }
         function undo() { if (historyIndex > 0) { historyIndex--; applyState(JSON.parse(history[historyIndex])); } }
         function redo() { if (historyIndex < history.length - 1) { historyIndex++; applyState(JSON.parse(history[historyIndex])); } }
-        function applyState(snap) { state.components = snap.components.map(c => ({ ...c })); renderWorkspace(); updateUndoRedoButtons(); }
+        function applyState(snap) { state.components = snap.components.map(c => ({ ...c })); renderWorkspace(); updateUndoRedoButtons(); autoSaveToLocalStorage(); }
         function updateUndoRedoButtons() {
             document.getElementById('btn-undo').disabled = historyIndex <= 0;
             document.getElementById('btn-redo').disabled = historyIndex >= history.length - 1;
@@ -190,16 +188,38 @@
             });
             if(Object.keys(csvDatabase).length > 0) genreSelect.value = Object.keys(csvDatabase)[0];
         }
+        
         function updatePalette() {
             paletteContainer.innerHTML = '';
             const g = genreSelect.value;
             const blocks = (g === 'myblocks') ? state.myBlocks : (csvDatabase[g] || []);
             if (blocks.length === 0) { paletteContainer.innerHTML = `<div class="text-xs text-slate-400 p-2 text-center">空です</div>`; return; }
-            blocks.forEach(b => {
+            blocks.forEach((b, idx) => {
                 const el = document.createElement('div');
-                el.className = `p-2 rounded border border-slate-200 text-xs font-bold cursor-grab shadow-sm ${POS_COLORS[b.value] || POS_COLORS['その他']}`;
+                el.className = `p-2 rounded border border-slate-200 text-xs font-bold cursor-grab shadow-sm select-none ${POS_COLORS[b.value] || POS_COLORS['その他']}`;
                 el.textContent = `${b.text} [${b.value}]`; el.draggable = true;
+                
                 el.ondragstart = (e) => e.dataTransfer.setData('blockStr', JSON.stringify(b));
+                
+                el.ondblclick = () => {
+                    if (g === 'myblocks') {
+                        state.myBlocks.splice(idx, 1);
+                        updatePalette();
+
+                        const beforeLength = state.components.length;
+                        state.components = state.components.filter(c => !(c.text === b.text && c.value === b.value));
+                        
+                        // パレット側の削除とワークスペース側の削除、両方を自動保存に即時反映
+                        autoSaveToLocalStorage();
+                        if (state.components.length !== beforeLength) {
+                            saveHistory();
+                            renderWorkspace();
+                        }
+                    } else {
+                        alert("CSVロードされた標準ジャンルのブロックはパレットから削除できません。");
+                    }
+                };
+
                 paletteContainer.appendChild(el);
             });
         }
@@ -379,7 +399,7 @@
                 if (draggingObj) {
                     handleSnapping(draggingObj); 
                     initialRowBlocks = [];
-                    saveHistory();
+                    saveHistory(); // ドラッグ移動完了時にも履歴更新＝ここでオートセーブが走る
                     renderWorkspace(); 
                     draggingObj = null;
                 }
@@ -391,7 +411,6 @@
             };
             document.getElementById('btn-undo').onclick = undo;
             document.getElementById('btn-redo').onclick = redo;
-            document.getElementById('btn-save').onclick = () => { autoSaveToLocalStorage(); alert("保存しました"); };
             document.getElementById('btn-reset').onclick = () => { if(confirm("リセットしますか？")) { state.components = []; saveHistory(); renderWorkspace(); } };
             document.getElementById('btn-open-add').onclick = () => document.getElementById('modal-add').classList.remove('hidden');
             document.getElementById('btn-close-add').onclick = () => document.getElementById('modal-add').classList.add('hidden');
