@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LingoBlock - 結合バグ修正版</title>
+    <title>LingoBlock - 完全版エディタ</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
@@ -11,6 +11,7 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
+        /* パズル風の凹凸結合デザイン用の共通スタイル */
         .puzzle-block {
             position: absolute;
             height: 40px;
@@ -25,20 +26,23 @@
             border: 2px solid rgba(255, 255, 255, 0.15);
         }
 
+        /* 結合状態に応じた角丸の制御 */
         .joint-none { border-radius: 8px; }
         .joint-left { border-radius: 8px 0 0 8px; border-right: none; }
         .joint-right { border-radius: 0 8px 8px 0; border-left: none; }
         .joint-middle { border-radius: 0; border-x: none; }
 
+        /* ジョイント部分の凸（右側） */
         .joint-left::after, .joint-middle::after {
             content: ''; position: absolute; right: -6px; top: 12px;
             width: 12px; height: 16px; background: inherit;
             border: 2px solid rgba(255, 255, 255, 0.15); border-left: none;
             border-radius: 0 4px 4px 0; z-index: 30;
         }
+        /* ジョイント部分の凹（左側） */
         .joint-right::before, .joint-middle::before {
             content: ''; position: absolute; left: -2px; top: 12px;
-            width: 6px; height: 16px; background: #0b0f19;
+            width: 6px; height: 16px; background: #0b0f19; /* ワークスペース背景色と同化 */
             border: 2px solid rgba(255, 255, 255, 0.15); border-left: none;
             border-radius: 0 4px 4px 0; z-index: 25;
         }
@@ -48,20 +52,28 @@
 
     <div class="flex flex-1 overflow-hidden relative">
         <aside class="w-80 bg-gray-800 border-r border-gray-700 flex flex-col p-4 z-50 overflow-y-auto no-scrollbar shadow-2xl">
-            <h1 class="text-xl font-bold tracking-wider mb-4 text-center bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">LingoBlock</h1>
+            <h1 class="text-xl font-bold tracking-wider mb-4 text-center bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+                LingoBlock
+            </h1>
+
             <div class="mb-4">
                 <label class="block text-xs font-semibold text-gray-400 mb-1">ジャンル選択</label>
-                <select id="genre-select" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm focus:outline-none"><option value="myblocks">マイブロック</option></select>
+                <select id="genre-select" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm focus:outline-none">
+                    <option value="myblocks">マイブロック</option>
+                </select>
             </div>
+
             <div class="grid grid-cols-2 gap-2 mb-4">
                 <button id="btn-undo" class="bg-gray-700 hover:bg-gray-600 text-xs py-1.5 rounded font-medium disabled:opacity-30">UNDO</button>
                 <button id="btn-redo" class="bg-gray-700 hover:bg-gray-600 text-xs py-1.5 rounded font-medium disabled:opacity-30">REDO</button>
                 <button id="btn-save" class="bg-blue-600 hover:bg-blue-500 text-xs py-1.5 rounded font-medium col-span-2">ブラウザに保存</button>
             </div>
+
             <div class="grid grid-cols-2 gap-2 mb-4">
                 <button id="btn-open-media" class="bg-indigo-600 hover:bg-indigo-500 text-xs py-1.5 rounded font-medium">IMAGE CAPTURE</button>
                 <button id="btn-open-add" class="bg-emerald-600 hover:bg-emerald-500 text-xs py-1.5 rounded font-medium">ブロック追加</button>
             </div>
+
             <div class="mb-4 border-t border-gray-700 pt-3">
                 <label class="block text-xs font-semibold text-gray-400 mb-1">データコードエリア</label>
                 <textarea id="save-code-area" class="w-full h-16 bg-gray-900 border border-gray-700 rounded p-1 text-xs font-mono resize-none focus:outline-none text-emerald-400" placeholder="コード..."></textarea>
@@ -69,10 +81,11 @@
                     <button id="btn-export" class="bg-gray-700 hover:bg-gray-600 text-xs py-1 rounded">SAVE CODE</button>
                     <button id="btn-import" class="bg-gray-700 hover:bg-gray-600 text-xs py-1 rounded">LOAD CODE</button>
                 </div>
-                <button id="btn-reset" class="w-full bg-red-600 hover:bg-red-500 text-xs py-1 rounded mt-2 font-medium">ALL RESET</button>
+                <button id="btn-reset" class="w-full bg-red-600 hover:bg-red-500 text-xs py-1 rounded mt-2 font-medium">ALL RESET (全消去)</button>
             </div>
+
             <div class="flex-1 border-t border-gray-700 pt-3 flex flex-col overflow-hidden">
-                <label class="block text-xs font-semibold text-gray-400 mb-2">パレット</label>
+                <label class="block text-xs font-semibold text-gray-400 mb-2">パレット (ドラッグして配置)</label>
                 <div id="palette-container" class="flex-1 overflow-y-auto space-y-2 p-1 bg-gray-900/50 rounded border border-gray-800/80 min-h-[150px]"></div>
             </div>
         </aside>
@@ -86,11 +99,11 @@
         <div class="bg-gray-800 border border-gray-700 p-6 rounded-xl w-80 shadow-2xl">
             <h3 class="text-base font-bold mb-4 text-emerald-400">✨ カスタムブロック追加</h3>
             <div class="space-y-3 text-sm">
-                <input type="text" id="add-word" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white" placeholder="example">
-                <select id="add-pos" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white">
+                <input type="text" id="add-word" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white focus:outline-none" placeholder="example">
+                <select id="add-pos" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white focus:outline-none">
                     <option value="名詞">名詞 (青)</option><option value="代名詞">代名詞 (水色)</option><option value="形容詞">形容詞 (緑)</option>
                     <option value="副詞">副詞 (深緑)</option><option value="前置詞">前置詞 (オレンジ)</option><option value="助動詞">助動詞 (赤)</option>
-                    <option value="冠詞">冠詞 (黄色)</option><option value="疑問詞">疑問詞 (紫)</option><option value="終末ブロック">終末ブロック</option><option value="その他">その他</option>
+                    <option value="冠詞">冠詞 (黄色)</option><option value="疑問詞">疑問詞 (紫)</option><option value="終末ブロック">終末ブロック (ダークグレー)</option><option value="その他">その他</option>
                 </select>
                 <div class="flex justify-end space-x-2 pt-2">
                     <button id="btn-close-add" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-xs">キャンセル</button>
@@ -113,8 +126,10 @@
         let csvDatabase = {};
         let history = [];
         let historyIndex = -1;
+        
         let draggingObj = null;
         let dragStartX = 0, dragStartY = 0;
+        let initialRowBlocks = []; // ドラッグ開始時の後ろの連動候補用
 
         const container = document.getElementById('editor-container');
         const workspace = document.getElementById('editor-workspace');
@@ -185,10 +200,11 @@
             });
         }
 
-        // --- ワークスペース描画 ---
+        // --- ワークスペース描画（パズル凹凸デザイン対応） ---
         function renderWorkspace() {
             workspace.innerHTML = '';
             
+            // 各ブロックの横幅を文字数から厳密に計算
             state.components.forEach(c => {
                 c.width = Math.max(76, c.text.length * 10 + 24); 
             });
@@ -239,9 +255,10 @@
                         else jointClass = "joint-middle";
                     }
 
-                    blockEl.className = `puzzle-block ${jointClass} ${POS_COLORS[block.value] || POS_COLORS['鎖その他']}`;
+                    blockEl.className = `puzzle-block ${jointClass} ${POS_COLORS[block.value] || POS_COLORS['その他']}`;
                     blockEl.textContent = block.text;
 
+                    // マウスダウン処理
                     blockEl.onmousedown = (e) => {
                         const now = Date.now();
                         if (now - block.lastClick < 300) {
@@ -250,74 +267,87 @@
                         }
                         block.lastClick = now;
                         draggingObj = block;
+                        
                         dragStartX = e.clientX - block.x;
                         dragStartY = e.clientY - block.y;
+
+                        // ドラッグ開始時に、同じ行の右側にあるブロックを「連動用リスト」に一応ストック
+                        initialRowBlocks = [];
+                        let followers = currentGroup.slice(index + 1);
+                        followers.forEach(f => {
+                            initialRowBlocks.push({
+                                obj: f,
+                                offsetX: f.x - block.x,
+                                offsetY: f.y - block.y
+                            });
+                        });
                     };
                     workspace.appendChild(blockEl);
                 });
             });
         }
 
-// --- ご提示いただいた条件通りの結合ロジック ---
+        // --- 位置ズレ・押し出し不具合を完全に排除した決定版ロジック ---
         function handleSnapping(p) {
             let q = null;
-            let minDistance = 60; // 結合判定を行うx方向の最大距離(px)
+            let minDistance = 60; 
 
             // 1. pにx方向で最も近く、y座標の誤差があまりないブロック(q)を探す
             state.components.forEach(c => {
                 if (c.id === p.id) return;
 
                 const dY = Math.abs(p.y - c.y);
-                if (dY < 30) { // y座標の誤差があまりない（30px以内）
-                    
-                    // pの左端・右端のどちらからでも、cとの一番近い「x方向の距離」を測る
+                if (dY < 30) {
                     const distToLeft = Math.abs((p.x + p.width) - c.x);
-                    const distToRight = Math.abs(p.x - (c.x + c.width));
+                    const distToRight = Math.abs(p.x - (c.width + c.x));
                     const currentDist = Math.min(distToLeft, distToRight);
 
                     if (currentDist < minDistance) {
                         minDistance = currentDist;
-                        q = c; // 結合対象を更新
+                        q = c;
                     }
                 }
             });
 
-            // 2. もし結合対象(q)が見つかったら、位置関係に応じて結合する
+            // 2. もし結合対象(q)が見つかったら、仕様通りに pq / qp 分岐結合
             if (q) {
-                // qおよび「qとすでに結合して右側に連なっているブロック」を一時的に退避するための移動幅
                 const shiftWidth = p.width; 
 
                 if (p.x < q.x) {
                     // 【条件】もしpがqより左にあるなら、pqの順番で結合する
-                    
-                    // qより右側（q自身を含む）にあるブロックを、pの横幅分だけ右にズラして隙間を作る
+                    const originalQx = q.x;
+
+                    // ① qより「厳密に右側」にある他の全ブロックを先に右へズラす
                     state.components.forEach(c => {
-                        if (c.id !== p.id && Math.abs(c.y - q.y) < 15 && c.x >= q.x - 2) {
+                        if (c.id !== p.id && c.id !== q.id && Math.abs(c.y - q.y) < 15 && c.x > originalQx) {
                             c.x += shiftWidth;
                         }
                     });
 
-                    // pの座標をqの元の位置（押し出す前のqの左端）にピタッと合わせる
-                    p.x = q.x - shiftWidth;
+                    // ② q自身は、元の位置から正確にpの幅分だけ右に移動
+                    q.x = originalQx + shiftWidth;
+                    q.y = p.y;
+
+                    // ③ pは、qが元々いた場所にジャストで収まる
+                    p.x = originalQx;
                     p.y = q.y;
 
                 } else {
                     // 【条件】もしqがpより左にあるなら、qpの順番で結合する
-                    
-                    // qのすぐ右隣（q.x + q.width）に元々あったブロック群を、pの横幅分だけ右にズラして隙間を作る
                     const insertX = q.x + q.width;
+                    
+                    // ① qの右隣(insertX)よりもさらに右にある他の全ブロックを右にズラす
                     state.components.forEach(c => {
                         if (c.id !== p.id && Math.abs(c.y - q.y) < 15 && c.x >= insertX - 2) {
                             c.x += shiftWidth;
                         }
                     });
 
-                    // pの座標をqのすぐ右隣にピタッと合わせる
+                    // ② pは、qのすぐ右隣にぴったり収まる
                     p.x = insertX;
                     p.y = q.y;
                 }
             }
-            // 結合しないならそのまま（何もしない）
         }
 
         function setupEventListeners() {
@@ -337,23 +367,42 @@
                 } catch(err){}
             };
 
+            // マウス移動（Shiftリアルタイム判定対応）
             window.onmousemove = e => {
                 if (draggingObj) {
-                    // ドラッグ中は、他のブロックの位置に干渉せず純粋に移動させる
                     draggingObj.x = e.clientX - dragStartX;
                     draggingObj.y = e.clientY - dragStartY;
+                    
                     const el = document.getElementById(draggingObj.id);
                     if (el) {
                         el.style.left = draggingObj.x + 'px';
                         el.style.top = draggingObj.y + 'px';
                     }
+
+                    // 【リアルタイム判定】ドラッグ中、Shiftキーが押されている間だけ後ろが追従
+                    if (e.shiftKey) {
+                        initialRowBlocks.forEach(f => {
+                            f.obj.x = draggingObj.x + f.offsetX;
+                            f.obj.y = draggingObj.y + f.offsetY;
+                            const fel = document.getElementById(f.obj.id);
+                            if (fel) {
+                                fel.style.left = f.obj.x + 'px';
+                                fel.style.top = f.obj.y + 'px';
+                            }
+                        });
+                    }
                 }
             };
 
+            // マウスアップ
             window.onmouseup = () => {
                 if (draggingObj) {
-                    // マウスを離した瞬間にのみ吸着と押し出し判定を行う（これでAが逃げるバグを完全解消）
+                    // 主役ブロックの結合スナップ処理
                     handleSnapping(draggingObj); 
+
+                    // マウスを離した時点でもShiftが押されていた場合、連動ブロックたちの最新位置も確定してあげる
+                    initialRowBlocks = [];
+
                     saveHistory();
                     renderWorkspace(); 
                     draggingObj = null;
@@ -387,11 +436,11 @@
         }
 
         function autoSaveToLocalStorage() {
-            localStorage.setItem('lingo_snap_workspace4', JSON.stringify({ components: state.components }));
-            localStorage.setItem('lingo_snap_myblocks4', JSON.stringify(state.myBlocks));
+            localStorage.setItem('lingo_snap_workspace_final', JSON.stringify({ components: state.components }));
+            localStorage.setItem('lingo_snap_myblocks_final', JSON.stringify(state.myBlocks));
         }
         function loadFromLocalStorage() {
-            const w = localStorage.getItem('lingo_snap_workspace4'); const m = localStorage.getItem('lingo_snap_myblocks4');
+            const w = localStorage.getItem('lingo_snap_workspace_final'); const m = localStorage.getItem('lingo_snap_myblocks_final');
             if (w) { state.components = JSON.parse(w).components || []; } if (m) state.myBlocks = JSON.parse(m);
         }
     </script>
