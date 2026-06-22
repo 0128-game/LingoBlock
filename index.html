@@ -118,9 +118,17 @@
             <div class="space-y-3 text-sm">
                 <input type="text" id="add-word" class="w-full bg-slate-50 border border-slate-200 rounded px-2 py-1 text-slate-800 focus:outline-none" placeholder="example">
                 <select id="add-pos" class="w-full bg-slate-50 border border-slate-200 rounded px-2 py-1 text-slate-800 focus:outline-none">
-                    <option value="名詞">名詞 (青)</option><option value="代名詞">代名詞 (水色)</option><option value="形容詞">形容詞 (緑)</option>
-                    <option value="副詞">副詞 (深緑)</option><option value="前置詞">前置詞 (オレンジ)</option><option value="助動詞">助動詞 (赤)</option>
-                    <option value="冠詞">冠詞 (黄色)</option><option value="疑問詞">疑問詞 (紫)</option><option value="終末ブロック">終末ブロック (グレー)</option><option value="その他">その他</option>
+                    <option value="動詞">動詞 (赤)</option>
+                    <option value="名詞">名詞 (青)</option>
+                    <option value="代名詞">代名詞 (水色)</option>
+                    <option value="形容詞">形容詞 (緑)</option>
+                    <option value="副詞">副詞 (深緑)</option>
+                    <option value="前置詞">前置詞 (オレンジ)</option>
+                    <option value="助動詞">助動詞 (ローズ)</option>
+                    <option value="冠詞">冠詞 (黄色)</option>
+                    <option value="疑問詞">疑問詞 (紫)</option>
+                    <option value="終末ブロック">終末ブロック (グレー)</option>
+                    <option value="その他">その他</option>
                 </select>
                 <div class="flex justify-end space-x-2 pt-2">
                     <button id="btn-close-add" class="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs rounded font-medium">キャンセル</button>
@@ -131,7 +139,9 @@
     </div>
 
     <script>
+        // 🛠️ 修正: 動詞(赤)を追加、競合する助動詞をローズに変更
         const POS_COLORS = {
+            "動詞": "bg-red-500 text-white", 
             "名詞": "bg-blue-500 text-white", "代名詞": "bg-sky-400 text-white",
             "形容詞": "bg-emerald-500 text-white", "副詞": "bg-teal-600 text-white",
             "前置詞": "bg-orange-400 text-white", "助動詞": "bg-rose-500 text-white",
@@ -360,7 +370,6 @@
         }
 
         function setupEventListeners() {
-            // 🛠️ 追加: 拡張メニューのアコーディオン開閉処理
             const btnToggleMenu = document.getElementById('btn-toggle-menu');
             const accordionContent = document.getElementById('accordion-content');
             const accordionArrow = document.getElementById('accordion-arrow');
