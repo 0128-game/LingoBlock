@@ -70,6 +70,15 @@
                     </select>
                 </div>
 
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">エディタ表示倍率 (<span id="zoom-level">100%</span>)</label>
+                    <div class="grid grid-cols-3 gap-1">
+                        <button id="btn-zoom-out" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs py-1 rounded font-bold">小 [-]</button>
+                        <button id="btn-zoom-reset" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs py-1 rounded font-semibold">等倍</button>
+                        <button id="btn-zoom-in" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs py-1 rounded font-bold">大 [+]</button>
+                    </div>
+                </div>
+
                 <div class="grid grid-cols-2 gap-2">
                     <button id="btn-undo" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs py-1.5 rounded font-semibold disabled:opacity-40">UNDO</button>
                     <button id="btn-redo" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs py-1.5 rounded font-semibold disabled:opacity-40">REDO</button>
@@ -102,13 +111,16 @@
             </div>
 
             <div class="flex-1 flex flex-col overflow-hidden border-t border-slate-100 pt-2">
-                <label class="block text-xs font-bold text-slate-500 mb-2">パレット (ドラッグして配置 / Wクリックでブロック抹消)</label>
+                <div class="flex justify-between items-center mb-2">
+                    <label class="block text-xs font-bold text-slate-500">パレット (配置:ドラッグ / 抹消:Wクリック)</label>
+                    <span id="word-count" class="text-[11px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">全 0 件</span>
+                </div>
                 <div id="palette-container" class="flex-1 overflow-y-auto space-y-2 p-1 bg-slate-50 rounded border border-slate-100 min-h-[150px]"></div>
             </div>
         </aside>
 
         <main class="flex-1 relative bg-[#f8fafc] overflow-hidden" id="editor-container">
-            <div id="editor-workspace" class="absolute inset-0 origin-top-left touch-none" style="width: 3000px; height: 3000px; background-image: radial-gradient(#cbd5e1 1.5px, transparent 1.5px); background-size: 24px 24px;"></div>
+            <div id="editor-workspace" class="absolute inset-0 origin-top-left touch-none transition-transform duration-100" style="width: 3000px; height: 3000px; background-image: radial-gradient(#cbd5e1 1.5px, transparent 1.5px); background-size: 24px 24px;"></div>
         </main>
     </div>
 
@@ -139,7 +151,6 @@
     </div>
 
     <script>
-        // 🛠️ 修正: 動詞(赤)を追加、競合する助動詞をローズに変更
         const POS_COLORS = {
             "動詞": "bg-red-500 text-white", 
             "名詞": "bg-blue-500 text-white", "代名詞": "bg-sky-400 text-white",
@@ -161,12 +172,16 @@
         let titleClickCount = 0;
         let titleClickTimer = null;
 
+        // 🛠️ 追加: ズーム倍率の管理変数
+        let zoomScale = 1.0;
+
         const container = document.getElementById('editor-container');
         const workspace = document.getElementById('editor-workspace');
         const genreSelect = document.getElementById('genre-select');
         const paletteContainer = document.getElementById('palette-container');
         const saveCodeArea = document.getElementById('save-code-area');
         const searchBar = document.getElementById('search-bar');
+        const wordCountEl = document.getElementById('word-count'); // 🛠️ 追加
 
         function utoa(str) { return btoa(unescape(encodeURIComponent(str))); }
         function atou(str) { return decodeURIComponent(escape(atob(str))); }
@@ -197,36 +212,32 @@
             document.getElementById('btn-redo').disabled = historyIndex >= history.length - 1;
         }
 
-async function loadCSVFiles() {
+        // 🛠️ 変更: 1から順にループし、ファイルが無い(404等)時点でbreakするよう修正
+        async function loadCSVFiles() {
             let i = 1;
             while (true) {
                 const name = `csv${i}.csv`;
                 try {
                     const res = await fetch('./csv/' + name);
-                    
-                    // 💡 ファイルが見つからない、またはエラーの場合はそこで読み込みを終了
-                    if (!res.ok) {
-                        console.log(`読み込み終了: ${name} が見つかりません。`);
-                        break; 
-                    }
+                    if (!res.ok) break; // ファイルがなくなったら終了
                     
                     const text = await res.text();
                     const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
-                    if (lines.length > 0) {
-                        const genreName = lines[0].split(',')[0];
-                        if (!csvDatabase[genreName]) csvDatabase[genreName] = [];
-                        for (let j = 1; j < lines.length; j++) {
-                            const p = lines[j].split(',');
-                            if (p.length >= 2) csvDatabase[genreName].push({ value: p[0].trim(), text: p[1].trim() });
-                        }
+                    if (lines.length === 0) { i++; continue; }
+                    
+                    const genreName = lines[0].split(',')[0];
+                    if (!csvDatabase[genreName]) csvDatabase[genreName] = [];
+                    for (let j = 1; j < lines.length; j++) {
+                        const p = lines[j].split(',');
+                        if (p.length >= 2) csvDatabase[genreName].push({ value: p[0].trim(), text: p[1].trim() });
                     }
                 } catch (e) {
-                    // 💡 通信エラーなどの場合も安全のためにここで終了
-                    break; 
+                    break; // 通信エラー等の場合も終了
                 }
-                i++; // 次の番号へ
+                i++;
             }
         }
+
         function updateGenreDropdown() {
             genreSelect.innerHTML = '<option value="myblocks">マイブロック</option>';
             Object.keys(csvDatabase).forEach(g => {
@@ -260,6 +271,9 @@ async function loadCSVFiles() {
                 const targetSrc = (g === 'myblocks') ? state.myBlocks : (csvDatabase[g] || []);
                 blocks = targetSrc.map(b => ({ ...b, fromMyBlocks: (g === 'myblocks'), genreName: g, originalRef: b }));
             }
+
+            // 🛠️ 追加: 単語数のバッジ表示を更新
+            wordCountEl.textContent = `全 ${blocks.length} 件`;
 
             if (blocks.length === 0) {
                 if (isSearching) {
@@ -304,6 +318,12 @@ async function loadCSVFiles() {
                 };
                 paletteContainer.appendChild(el);
             });
+        }
+
+        // 🛠️ 追加: ズーム表示を適用する関数
+        function applyZoom() {
+            workspace.style.transform = `scale(${zoomScale})`;
+            document.getElementById('zoom-level').textContent = `${Math.round(zoomScale * 100)}%`;
         }
 
         function renderWorkspace() {
@@ -351,7 +371,11 @@ async function loadCSVFiles() {
                             saveHistory(); renderWorkspace(); draggingObj = null; return;
                         }
                         block.lastClick = now; draggingObj = block;
-                        dragStartX = e.clientX - block.x; dragStartY = e.clientY - block.y;
+                        
+                        // 🛠️ 修正: ズーム倍率を考慮したドラッグ計算
+                        dragStartX = (e.clientX / zoomScale) - block.x; 
+                        dragStartY = (e.clientY / zoomScale) - block.y;
+                        
                         initialRowBlocks = [];
                         let followers = currentGroup.slice(index + 1);
                         followers.forEach(f => { initialRowBlocks.push({ obj: f, offsetX: f.x - block.x, offsetY: f.y - block.y }); });
@@ -401,6 +425,11 @@ async function loadCSVFiles() {
                 }
             };
 
+            // 🛠️ 追加: ズームボタンのイベント設定
+            document.getElementById('btn-zoom-in').onclick = () => { if (zoomScale < 2.0) { zoomScale += 0.1; applyZoom(); } };
+            document.getElementById('btn-zoom-out').onclick = () => { if (zoomScale > 0.5) { zoomScale -= 0.1; applyZoom(); } };
+            document.getElementById('btn-zoom-reset').onclick = () => { zoomScale = 1.0; applyZoom(); };
+
             genreSelect.onchange = () => { searchBar.value = ''; updatePalette(); };
             searchBar.oninput = updatePalette;
 
@@ -410,10 +439,11 @@ async function loadCSVFiles() {
                 try {
                     const block = JSON.parse(e.dataTransfer.getData('blockStr'));
                     const rect = workspace.getBoundingClientRect();
+                    // 🛠️ 修正: ドロップ位置もズーム倍率で補正
                     state.components.push({
                         id: 'b' + Date.now() + Math.random().toString(36).substr(2, 4),
                         text: block.text, value: block.value,
-                        x: e.clientX - rect.left - 45, y: e.clientY - rect.top - 20, lastClick: 0
+                        x: (e.clientX - rect.left) / zoomScale - 45, y: (e.clientY - rect.top) / zoomScale - 20, lastClick: 0
                     });
                     saveHistory(); renderWorkspace();
                 } catch(err){}
@@ -421,7 +451,10 @@ async function loadCSVFiles() {
 
             window.onmousemove = e => {
                 if (draggingObj) {
-                    draggingObj.x = e.clientX - dragStartX; draggingObj.y = e.clientY - dragStartY;
+                    // 🛠️ 修正: 移動量計算をズーム倍率で補正
+                    draggingObj.x = (e.clientX / zoomScale) - dragStartX;
+                    draggingObj.y = (e.clientY / zoomScale) - dragStartY;
+                    
                     const el = document.getElementById(draggingObj.id);
                     if (el) { el.style.left = draggingObj.x + 'px'; el.style.top = draggingObj.y + 'px'; }
                     if (e.shiftKey) {
