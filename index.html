@@ -57,6 +57,11 @@
                 LingoBlock
             </h1>
 
+            <div class="mb-3">
+                <label class="block text-xs font-bold text-slate-500 mb-1">ブロックを検索 (全ジャンル横断)</label>
+                <input type="text" id="search-bar" class="w-full bg-slate-50 border border-slate-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-indigo-500 text-slate-700" placeholder="単語を入力...">
+            </div>
+
             <div class="mb-4">
                 <label class="block text-xs font-bold text-slate-500 mb-1">ジャンル選択</label>
                 <select id="genre-select" class="w-full bg-slate-50 border border-slate-200 rounded px-2 py-1.5 text-sm focus:outline-none text-slate-700">
@@ -128,7 +133,6 @@
         let dragStartX = 0, dragStartY = 0;
         let initialRowBlocks = [];
 
-        // 🛠️ 追加: タイトル3回クリック用のカウンター管理
         let titleClickCount = 0;
         let titleClickTimer = null;
 
@@ -137,6 +141,7 @@
         const genreSelect = document.getElementById('genre-select');
         const paletteContainer = document.getElementById('palette-container');
         const saveCodeArea = document.getElementById('save-code-area');
+        const searchBar = document.getElementById('search-bar'); // 🛠️ 追加
 
         function utoa(str) { return btoa(unescape(encodeURIComponent(str))); }
         function atou(str) { return decodeURIComponent(escape(atob(str))); }
@@ -189,21 +194,76 @@
             if(Object.keys(csvDatabase).length > 0) genreSelect.value = Object.keys(csvDatabase)[0];
         }
         
+        // 🛠️ 変更: 検索ロジックを含めたパレット更新
         function updatePalette() {
             paletteContainer.innerHTML = '';
-            const g = genreSelect.value;
-            const blocks = (g === 'myblocks') ? state.myBlocks : (csvDatabase[g] || []);
-            if (blocks.length === 0) { paletteContainer.innerHTML = `<div class="text-xs text-slate-400 p-2 text-center">空です</div>`; return; }
+            const query = searchBar.value.trim().toLowerCase(); // 大文字小文字を区別しない
+            
+            let blocks = [];
+            let isSearching = query.length > 0;
+
+            if (isSearching) {
+                // 1. 全ジャンル横断検索モード
+                // マイブロックから探す
+                state.myBlocks.forEach(b => {
+                    if (b.text.toLowerCase().includes(query)) {
+                        blocks.push({ ...b, fromMyBlocks: true, originalRef: b });
+                    }
+                });
+                // 各CSVジャンルから探す
+                Object.keys(csvDatabase).forEach(genre => {
+                    csvDatabase[genre].forEach(b => {
+                        if (b.text.toLowerCase().includes(query)) {
+                            blocks.push({ ...b, fromMyBlocks: false, genreName: genre });
+                        }
+                    });
+                });
+                
+                // ジャンル選択欄を一時的に無効感（または未選択状態に）見せるため、検索中はセレクトボックス値を固定しない
+            } else {
+                // 2. 通常のジャンル選択モード
+                const g = genreSelect.value;
+                const targetSrc = (g === 'myblocks') ? state.myBlocks : (csvDatabase[g] || []);
+                blocks = targetSrc.map(b => ({ ...b, fromMyBlocks: (g === 'myblocks'), genreName: g, originalRef: b }));
+            }
+
+            // 🔍 検索結果がゼロの場合の提案処理
+            if (blocks.length === 0) {
+                if (isSearching) {
+                    paletteContainer.innerHTML = `
+                        <div class="text-xs text-slate-400 p-2 text-center">一致するブロックがありません</div>
+                        <button id="btn-suggest-create" class="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs py-2 rounded font-bold border border-emerald-200 mt-1 transition-all">
+                            ✨ "${searchBar.value.trim()}" を新規作成
+                        </button>
+                    `;
+                    document.getElementById('btn-suggest-create').onclick = () => {
+                        document.getElementById('add-word').value = searchBar.value.trim();
+                        document.getElementById('modal-add').classList.remove('hidden');
+                    };
+                } else {
+                    paletteContainer.innerHTML = `<div class="text-xs text-slate-400 p-2 text-center">空です</div>`;
+                }
+                return;
+            }
+
+            // ブロックの描画
             blocks.forEach((b, idx) => {
                 const el = document.createElement('div');
                 el.className = `p-2 rounded border border-slate-200 text-xs font-bold cursor-grab shadow-sm select-none ${POS_COLORS[b.value] || POS_COLORS['その他']}`;
-                el.textContent = `${b.text} [${b.value}]`; el.draggable = true;
                 
-                el.ondragstart = (e) => e.dataTransfer.setData('blockStr', JSON.stringify(b));
+                // 検索中の場合は、どこのジャンルの単語かわかるようにラベルを付与
+                const badge = (isSearching) ? ` <span class="opacity-60 text-[9px] font-normal">[${b.fromMyBlocks ? 'マイ' : b.genreName}]</span>` : '';
+                el.innerHTML = `${b.text} [${b.value}]${badge}`;
+                el.draggable = true;
+                
+                el.ondragstart = (e) => e.dataTransfer.setData('blockStr', JSON.stringify({ text: b.text, value: b.value }));
                 
                 el.ondblclick = () => {
-                    if (g === 'myblocks') {
-                        state.myBlocks.splice(idx, 1);
+                    // マイブロックに由来するものだけ削除を許可
+                    if (b.fromMyBlocks) {
+                        const targetIdx = state.myBlocks.indexOf(b.originalRef);
+                        if (targetIdx !== -1) state.myBlocks.splice(targetIdx, 1);
+                        
                         updatePalette();
 
                         const beforeLength = state.components.length;
@@ -215,7 +275,7 @@
                             renderWorkspace();
                         }
                     } else {
-                        alert("CSVロードされた標準ジャンルのブロックはパレットから削除できません。");
+                        alert(`「${b.genreName}」の標準ブロックはパレットから削除できません。`);
                     }
                 };
 
@@ -225,48 +285,31 @@
 
         function renderWorkspace() {
             workspace.innerHTML = '';
-            
-            state.components.forEach(c => {
-                c.width = Math.max(76, c.text.length * 10 + 24); 
-            });
-
+            state.components.forEach(c => { c.width = Math.max(76, c.text.length * 10 + 24); });
             let checkedIds = new Set();
             
             state.components.forEach(c => {
                 if (checkedIds.has(c.id)) return;
-
                 let rowBlocks = state.components.filter(other => Math.abs(other.y - c.y) < 15);
                 rowBlocks.sort((a, b) => a.x - b.x);
 
                 let currentGroup = [];
                 for (let i = 0; i < rowBlocks.length; i++) {
-                    if (currentGroup.length === 0) {
-                        currentGroup.push(rowBlocks[i]);
-                    } else {
+                    if (currentGroup.length === 0) { currentGroup.push(rowBlocks[i]); } else {
                         let lastBlock = currentGroup[currentGroup.length - 1];
-                        if (rowBlocks[i].x - (lastBlock.x + lastBlock.width) <= 15) {
-                            currentGroup.push(rowBlocks[i]);
-                        } else {
-                            if (currentGroup.some(b => b.id === c.id)) break;
-                            currentGroup = [rowBlocks[i]];
+                        if (rowBlocks[i].x - (lastBlock.x + lastBlock.width) <= 15) { currentGroup.push(rowBlocks[i]); } else {
+                            if (currentGroup.some(b => b.id === c.id)) break; currentGroup = [rowBlocks[i]];
                         }
                     }
                 }
 
                 currentGroup.forEach((block, index) => {
                     checkedIds.add(block.id);
-
                     if (currentGroup.length > 1 && index > 0) {
-                        let prev = currentGroup[index - 1];
-                        block.x = prev.x + prev.width;
-                        block.y = prev.y;
+                        let prev = currentGroup[index - 1]; block.x = prev.x + prev.width; block.y = prev.y;
                     }
-
                     const blockEl = document.createElement('div');
-                    blockEl.id = block.id;
-                    blockEl.style.left = block.x + 'px'; 
-                    blockEl.style.top = block.y + 'px';
-                    blockEl.style.width = block.width + 'px';
+                    blockEl.id = block.id; blockEl.style.left = block.x + 'px'; blockEl.style.top = block.y + 'px'; blockEl.style.width = block.width + 'px';
                     
                     let jointClass = "joint-none";
                     if (currentGroup.length > 1) {
@@ -275,7 +318,7 @@
                         else jointClass = "joint-middle";
                     }
 
-                    blockEl.className = `puzzle-block ${jointClass} ${POS_COLORS[block.value] || POS_COLORS['standard_color'] || POS_COLORS['その他']}`;
+                    blockEl.className = `puzzle-block ${jointClass} ${POS_COLORS[block.value] || POS_COLORS['その他']}`;
                     blockEl.textContent = block.text;
 
                     blockEl.onmousedown = (e) => {
@@ -284,21 +327,11 @@
                             state.components = state.components.filter(item => item.id !== block.id);
                             saveHistory(); renderWorkspace(); draggingObj = null; return;
                         }
-                        block.lastClick = now;
-                        draggingObj = block;
-                        
-                        dragStartX = e.clientX - block.x;
-                        dragStartY = e.clientY - block.y;
-
+                        block.lastClick = now; draggingObj = block;
+                        dragStartX = e.clientX - block.x; dragStartY = e.clientY - block.y;
                         initialRowBlocks = [];
                         let followers = currentGroup.slice(index + 1);
-                        followers.forEach(f => {
-                            initialRowBlocks.push({
-                                obj: f,
-                                offsetX: f.x - block.x,
-                                offsetY: f.y - block.y
-                            });
-                        });
+                        followers.forEach(f => { initialRowBlocks.push({ obj: f, offsetX: f.x - block.x, offsetY: f.y - block.y }); });
                     };
                     workspace.appendChild(blockEl);
                 });
@@ -306,54 +339,38 @@
         }
 
         function handleSnapping(p) {
-            let q = null;
-            let minDistance = 60; 
-
+            let q = null; let minDistance = 60;
             state.components.forEach(c => {
                 if (c.id === p.id) return;
-
                 const dY = Math.abs(p.y - c.y);
                 if (dY < 30) {
-                    const distToLeft = Math.abs((p.x + p.width) - c.x);
-                    const distToRight = Math.abs(p.x - (c.width + c.x));
-                    const currentDist = Math.min(distToLeft, distToRight);
-
-                    if (currentDist < minDistance) {
-                        minDistance = currentDist;
-                        q = c;
-                    }
+                    const distToLeft = Math.abs((p.x + p.width) - c.x); const distToRight = Math.abs(p.x - (c.width + c.x));
+                    const currentDist = Math.min(distToLeft, distToRight); if (currentDist < minDistance) { minDistance = currentDist; q = c; }
                 }
             });
-
             if (q) {
-                const shiftWidth = p.width; 
-
+                const shiftWidth = p.width;
                 if (p.x < q.x) {
                     const originalQx = q.x;
-                    state.components.forEach(c => {
-                        if (c.id !== p.id && c.id !== q.id && Math.abs(c.y - q.y) < 15 && c.x > originalQx) {
-                            c.x += shiftWidth;
-                        }
-                    });
-                    q.x = originalQx + shiftWidth;
-                    q.y = p.y;
-                    p.x = originalQx;
-                    p.y = q.y;
+                    state.components.forEach(c => { if (c.id !== p.id && c.id !== q.id && Math.abs(c.y - q.y) < 15 && c.x > originalQx) c.x += shiftWidth; });
+                    q.x = originalQx + shiftWidth; q.y = p.y; p.x = originalQx; p.y = q.y;
                 } else {
                     const insertX = q.x + q.width;
-                    state.components.forEach(c => {
-                        if (c.id !== p.id && Math.abs(c.y - q.y) < 15 && c.x >= insertX - 2) {
-                            c.x += shiftWidth;
-                        }
-                    });
-                    p.x = insertX;
-                    p.y = q.y;
+                    state.components.forEach(c => { if (c.id !== p.id && Math.abs(c.y - q.y) < 15 && c.x >= insertX - 2) c.x += shiftWidth; });
+                    p.x = insertX; p.y = q.y;
                 }
             }
         }
 
         function setupEventListeners() {
-            genreSelect.onchange = updatePalette;
+            genreSelect.onchange = () => {
+                searchBar.value = ''; // ジャンルを切り替えたら検索をクリア
+                updatePalette();
+            };
+            
+            // 🛠️ 追加: 検索バーの入力イベント
+            searchBar.oninput = updatePalette;
+
             container.ondragover = e => e.preventDefault();
             container.ondrop = e => {
                 e.preventDefault();
@@ -371,59 +388,28 @@
 
             window.onmousemove = e => {
                 if (draggingObj) {
-                    draggingObj.x = e.clientX - dragStartX;
-                    draggingObj.y = e.clientY - dragStartY;
-                    
+                    draggingObj.x = e.clientX - dragStartX; draggingObj.y = e.clientY - dragStartY;
                     const el = document.getElementById(draggingObj.id);
-                    if (el) {
-                        el.style.left = draggingObj.x + 'px';
-                        el.style.top = draggingObj.y + 'px';
-                    }
-
+                    if (el) { el.style.left = draggingObj.x + 'px'; el.style.top = draggingObj.y + 'px'; }
                     if (e.shiftKey) {
                         initialRowBlocks.forEach(f => {
-                            f.obj.x = draggingObj.x + f.offsetX;
-                            f.obj.y = draggingObj.y + f.offsetY;
-                            const fel = document.getElementById(f.obj.id);
-                            if (fel) {
-                                fel.style.left = f.obj.x + 'px';
-                                fel.style.top = f.obj.y + 'px';
-                            }
+                            f.obj.x = draggingObj.x + f.offsetX; f.obj.y = draggingObj.y + f.offsetY;
+                            const fel = document.getElementById(f.obj.id); if (fel) { fel.style.left = f.obj.x + 'px'; fel.style.top = f.obj.y + 'px'; }
                         });
                     }
                 }
             };
 
-            window.onmouseup = () => {
-                if (draggingObj) {
-                    handleSnapping(draggingObj); 
-                    initialRowBlocks = [];
-                    saveHistory(); 
-                    renderWorkspace(); 
-                    draggingObj = null;
-                }
-            };
-
+            window.onmouseup = () => { if (draggingObj) { handleSnapping(draggingObj); initialRowBlocks = []; saveHistory(); renderWorkspace(); draggingObj = null; } };
             window.onkeydown = e => {
                 if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
                 if ((e.ctrlKey || e.metaKey) && e.key === 'y') { e.preventDefault(); redo(); }
             };
 
-            // 🛠️ 追加: タイトル「LingoBlock」3回クリックの処理
             document.getElementById('app-title').onclick = () => {
-                titleClickCount++;
-                
-                // 初回クリックから500ms以内に次のクリックがなければリセットするタイマー
-                clearTimeout(titleClickTimer);
-                titleClickTimer = setTimeout(() => {
-                    titleClickCount = 0;
-                }, 500);
-
-                // 3回連続クリック達成時
-                if (titleClickCount === 3) {
-                    titleClickCount = 0; // カウントリセット
-                    window.open('https://0128-game.github.io/Lingoblock-CSVmaker/', '_blank'); // 新規タブで起動
-                }
+                titleClickCount++; clearTimeout(titleClickTimer);
+                titleClickTimer = setTimeout(() => { titleClickCount = 0; }, 500);
+                if (titleClickCount === 3) { titleClickCount = 0; window.open('https://0128-game.github.io/Lingoblock-CSVmaker/', '_blank'); }
             };
 
             document.getElementById('btn-undo').onclick = undo;
@@ -434,7 +420,10 @@
             document.getElementById('btn-create-block').onclick = () => {
                 const t = document.getElementById('add-word').value.trim(); const v = document.getElementById('add-pos').value;
                 if(!t) return alert("入力してください"); state.myBlocks.push({ text: t, value: v });
-                autoSaveToLocalStorage(); genreSelect.value = 'myblocks'; updatePalette();
+                autoSaveToLocalStorage(); 
+                searchBar.value = ''; // 追加後は検索をクリアしてマイブロックを見せる
+                genreSelect.value = 'myblocks'; 
+                updatePalette();
                 document.getElementById('add-word').value = ''; document.getElementById('modal-add').classList.add('hidden');
             };
             document.getElementById('btn-export').onclick = () => { saveCodeArea.value = utoa(JSON.stringify({ components: state.components })); };
