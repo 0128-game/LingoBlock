@@ -197,18 +197,34 @@
             document.getElementById('btn-redo').disabled = historyIndex >= history.length - 1;
         }
 
-        async function loadCSVFiles() {
-            const csvFiles = ['csv1.csv', 'csv2.csv', 'csv3.csv'];
-            for (const name of csvFiles) {
+async function loadCSVFiles() {
+            let i = 1;
+            while (true) {
+                const name = `csv${i}.csv`;
                 try {
-                    const res = await fetch('./csv/' + name); if (!res.ok) continue;
-                    const text = await res.text();
-                    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0); if (lines.length === 0) continue;
-                    const genreName = lines[0].split(',')[0]; if (!csvDatabase[genreName]) csvDatabase[genreName] = [];
-                    for (let i = 1; i < lines.length; i++) {
-                        const p = lines[i].split(','); if (p.length >= 2) csvDatabase[genreName].push({ value: p[0].trim(), text: p[1].trim() });
+                    const res = await fetch('./csv/' + name);
+                    
+                    // 💡 ファイルが見つからない、またはエラーの場合はそこで読み込みを終了
+                    if (!res.ok) {
+                        console.log(`読み込み終了: ${name} が見つかりません。`);
+                        break; 
                     }
-                } catch (e) {}
+                    
+                    const text = await res.text();
+                    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+                    if (lines.length > 0) {
+                        const genreName = lines[0].split(',')[0];
+                        if (!csvDatabase[genreName]) csvDatabase[genreName] = [];
+                        for (let j = 1; j < lines.length; j++) {
+                            const p = lines[j].split(',');
+                            if (p.length >= 2) csvDatabase[genreName].push({ value: p[0].trim(), text: p[1].trim() });
+                        }
+                    }
+                } catch (e) {
+                    // 💡 通信エラーなどの場合も安全のためにここで終了
+                    break; 
+                }
+                i++; // 次の番号へ
             }
         }
         function updateGenreDropdown() {
