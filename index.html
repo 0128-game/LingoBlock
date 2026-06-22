@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LingoBlock</title>
+    <title>LingoBlock - ライトテーマ完全版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
@@ -52,41 +52,56 @@
 <body class="bg-[#f8fafc] text-[#1e293b] font-sans overflow-hidden h-screen w-screen flex flex-col">
 
     <div class="flex flex-1 overflow-hidden relative">
-        <aside class="w-80 bg-white border-r border-slate-200 flex flex-col p-4 z-50 overflow-y-auto no-scrollbar shadow-lg">
-            <h1 id="app-title" class="text-xl font-extrabold tracking-wider mb-4 text-center bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent cursor-pointer select-none">
+        <aside class="w-80 bg-white border-r border-slate-200 flex flex-col p-4 z-50 overflow-hidden shadow-lg">
+            <h1 id="app-title" class="text-xl font-extrabold tracking-wider mb-3 text-center bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent cursor-pointer select-none">
                 LingoBlock
             </h1>
 
-            <div class="mb-3">
-                <label class="block text-xs font-bold text-slate-500 mb-1">ブロックを検索 (全ジャンル横断)</label>
-                <input type="text" id="search-bar" class="w-full bg-slate-50 border border-slate-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-indigo-500 text-slate-700" placeholder="単語を入力...">
-            </div>
-
-            <div class="mb-4">
-                <label class="block text-xs font-bold text-slate-500 mb-1">ジャンル選択</label>
-                <select id="genre-select" class="w-full bg-slate-50 border border-slate-200 rounded px-2 py-1.5 text-sm focus:outline-none text-slate-700">
-                    <option value="myblocks">マイブロック</option>
-                </select>
-            </div>
-
-            <div class="grid grid-cols-2 gap-2 mb-4">
-                <button id="btn-undo" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs py-1.5 rounded font-semibold disabled:opacity-40">UNDO</button>
-                <button id="btn-redo" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs py-1.5 rounded font-semibold disabled:opacity-40">REDO</button>
-                <button id="btn-open-media" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs py-1.5 rounded font-bold border border-indigo-200">IMAGE CAPTURE</button>
-                <button id="btn-open-add" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs py-1.5 rounded font-bold border border-emerald-200">ブロック追加</button>
-            </div>
-
-            <div class="mb-4 border-t border-slate-100 pt-3">
-                <label class="block text-xs font-bold text-slate-500 mb-1">データコードエリア</label>
-                <textarea id="save-code-area" class="w-full h-16 bg-slate-50 border border-slate-200 rounded p-1 text-xs font-mono resize-none focus:outline-none text-blue-600" placeholder="コード..."></textarea>
-                <div class="grid grid-cols-2 gap-2 mt-1">
-                    <button id="btn-export" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs py-1 rounded font-medium">SAVE CODE</button>
-                    <button id="btn-import" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs py-1 rounded font-medium">LOAD CODE</button>
+            <div class="space-y-3 mb-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">ブロックを検索 (全ジャンル横断)</label>
+                    <input type="text" id="search-bar" class="w-full bg-slate-50 border border-slate-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-indigo-500 text-slate-700" placeholder="単語を入力...">
                 </div>
-                <button id="btn-reset" class="w-full bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs py-1 rounded mt-2 font-bold">ALL RESET (全消去)</button>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">ジャンル選択</label>
+                    <select id="genre-select" class="w-full bg-slate-50 border border-slate-200 rounded px-2 py-1.5 text-sm focus:outline-none text-slate-700">
+                        <option value="myblocks">マイブロック</option>
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="btn-undo" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs py-1.5 rounded font-semibold disabled:opacity-40">UNDO</button>
+                    <button id="btn-redo" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs py-1.5 rounded font-semibold disabled:opacity-40">REDO</button>
+                </div>
             </div>
 
-            <div class="flex-1 border-t border-slate-100 pt-3 flex flex-col overflow-hidden">
+            <div class="border border-slate-200 rounded-lg mb-4 overflow-hidden bg-slate-50/50">
+                <button id="btn-toggle-menu" class="w-full px-3 py-2 flex justify-between items-center text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 border-b border-slate-200 select-none transition-all">
+                    <span>⚙️ 拡張メニュー (ブロック追加・保存など)</span>
+                    <span id="accordion-arrow" class="transition-transform duration-200 rotate-0">▼</span>
+                </button>
+                
+                <div id="accordion-content" class="hidden p-3 space-y-3 bg-white border-t border-slate-100">
+                    <div class="grid grid-cols-2 gap-2">
+                        <button id="btn-open-media" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs py-1.5 rounded font-bold border border-indigo-200">IMAGE CAPTURE</button>
+                        <button id="btn-open-add" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs py-1.5 rounded font-bold border border-emerald-200">ブロック追加</button>
+                    </div>
+
+                    <div class="border-t border-slate-100 pt-2">
+                        <label class="block text-[11px] font-bold text-slate-400 mb-1">データコードエリア</label>
+                        <textarea id="save-code-area" class="w-full h-12 bg-slate-50 border border-slate-200 rounded p-1 text-xs font-mono resize-none focus:outline-none text-blue-600" placeholder="コード..."></textarea>
+                        <div class="grid grid-cols-2 gap-2 mt-1">
+                            <button id="btn-export" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs py-1 rounded font-medium">SAVE CODE</button>
+                            <button id="btn-import" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs py-1 rounded font-medium">LOAD CODE</button>
+                        </div>
+                    </div>
+                    
+                    <button id="btn-reset" class="w-full bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs py-1.5 rounded font-bold">ALL RESET (全消去)</button>
+                </div>
+            </div>
+
+            <div class="flex-1 flex flex-col overflow-hidden border-t border-slate-100 pt-2">
                 <label class="block text-xs font-bold text-slate-500 mb-2">パレット (ドラッグして配置 / Wクリックでブロック抹消)</label>
                 <div id="palette-container" class="flex-1 overflow-y-auto space-y-2 p-1 bg-slate-50 rounded border border-slate-100 min-h-[150px]"></div>
             </div>
@@ -141,7 +156,7 @@
         const genreSelect = document.getElementById('genre-select');
         const paletteContainer = document.getElementById('palette-container');
         const saveCodeArea = document.getElementById('save-code-area');
-        const searchBar = document.getElementById('search-bar'); // 🛠️ 追加
+        const searchBar = document.getElementById('search-bar');
 
         function utoa(str) { return btoa(unescape(encodeURIComponent(str))); }
         function atou(str) { return decodeURIComponent(escape(atob(str))); }
@@ -194,23 +209,19 @@
             if(Object.keys(csvDatabase).length > 0) genreSelect.value = Object.keys(csvDatabase)[0];
         }
         
-        // 🛠️ 変更: 検索ロジックを含めたパレット更新
         function updatePalette() {
             paletteContainer.innerHTML = '';
-            const query = searchBar.value.trim().toLowerCase(); // 大文字小文字を区別しない
+            const query = searchBar.value.trim().toLowerCase();
             
             let blocks = [];
             let isSearching = query.length > 0;
 
             if (isSearching) {
-                // 1. 全ジャンル横断検索モード
-                // マイブロックから探す
                 state.myBlocks.forEach(b => {
                     if (b.text.toLowerCase().includes(query)) {
                         blocks.push({ ...b, fromMyBlocks: true, originalRef: b });
                     }
                 });
-                // 各CSVジャンルから探す
                 Object.keys(csvDatabase).forEach(genre => {
                     csvDatabase[genre].forEach(b => {
                         if (b.text.toLowerCase().includes(query)) {
@@ -218,16 +229,12 @@
                         }
                     });
                 });
-                
-                // ジャンル選択欄を一時的に無効感（または未選択状態に）見せるため、検索中はセレクトボックス値を固定しない
             } else {
-                // 2. 通常のジャンル選択モード
                 const g = genreSelect.value;
                 const targetSrc = (g === 'myblocks') ? state.myBlocks : (csvDatabase[g] || []);
                 blocks = targetSrc.map(b => ({ ...b, fromMyBlocks: (g === 'myblocks'), genreName: g, originalRef: b }));
             }
 
-            // 🔍 検索結果がゼロの場合の提案処理
             if (blocks.length === 0) {
                 if (isSearching) {
                     paletteContainer.innerHTML = `
@@ -246,12 +253,10 @@
                 return;
             }
 
-            // ブロックの描画
-            blocks.forEach((b, idx) => {
+            blocks.forEach((b) => {
                 const el = document.createElement('div');
                 el.className = `p-2 rounded border border-slate-200 text-xs font-bold cursor-grab shadow-sm select-none ${POS_COLORS[b.value] || POS_COLORS['その他']}`;
                 
-                // 検索中の場合は、どこのジャンルの単語かわかるようにラベルを付与
                 const badge = (isSearching) ? ` <span class="opacity-60 text-[9px] font-normal">[${b.fromMyBlocks ? 'マイ' : b.genreName}]</span>` : '';
                 el.innerHTML = `${b.text} [${b.value}]${badge}`;
                 el.draggable = true;
@@ -259,26 +264,18 @@
                 el.ondragstart = (e) => e.dataTransfer.setData('blockStr', JSON.stringify({ text: b.text, value: b.value }));
                 
                 el.ondblclick = () => {
-                    // マイブロックに由来するものだけ削除を許可
                     if (b.fromMyBlocks) {
                         const targetIdx = state.myBlocks.indexOf(b.originalRef);
                         if (targetIdx !== -1) state.myBlocks.splice(targetIdx, 1);
-                        
                         updatePalette();
-
                         const beforeLength = state.components.length;
                         state.components = state.components.filter(c => !(c.text === b.text && c.value === b.value));
-                        
                         autoSaveToLocalStorage();
-                        if (state.components.length !== beforeLength) {
-                            saveHistory();
-                            renderWorkspace();
-                        }
+                        if (state.components.length !== beforeLength) { saveHistory(); renderWorkspace(); }
                     } else {
                         alert(`「${b.genreName}」の標準ブロックはパレットから削除できません。`);
                     }
                 };
-
                 paletteContainer.appendChild(el);
             });
         }
@@ -363,12 +360,23 @@
         }
 
         function setupEventListeners() {
-            genreSelect.onchange = () => {
-                searchBar.value = ''; // ジャンルを切り替えたら検索をクリア
-                updatePalette();
+            // 🛠️ 追加: 拡張メニューのアコーディオン開閉処理
+            const btnToggleMenu = document.getElementById('btn-toggle-menu');
+            const accordionContent = document.getElementById('accordion-content');
+            const accordionArrow = document.getElementById('accordion-arrow');
+
+            btnToggleMenu.onclick = () => {
+                const isHidden = accordionContent.classList.contains('hidden');
+                if (isHidden) {
+                    accordionContent.classList.remove('hidden');
+                    accordionArrow.textContent = '▲';
+                } else {
+                    accordionContent.classList.add('hidden');
+                    accordionArrow.textContent = '▼';
+                }
             };
-            
-            // 🛠️ 追加: 検索バーの入力イベント
+
+            genreSelect.onchange = () => { searchBar.value = ''; updatePalette(); };
             searchBar.oninput = updatePalette;
 
             container.ondragover = e => e.preventDefault();
@@ -420,10 +428,7 @@
             document.getElementById('btn-create-block').onclick = () => {
                 const t = document.getElementById('add-word').value.trim(); const v = document.getElementById('add-pos').value;
                 if(!t) return alert("入力してください"); state.myBlocks.push({ text: t, value: v });
-                autoSaveToLocalStorage(); 
-                searchBar.value = ''; // 追加後は検索をクリアしてマイブロックを見せる
-                genreSelect.value = 'myblocks'; 
-                updatePalette();
+                autoSaveToLocalStorage(); searchBar.value = ''; genreSelect.value = 'myblocks'; updatePalette();
                 document.getElementById('add-word').value = ''; document.getElementById('modal-add').classList.add('hidden');
             };
             document.getElementById('btn-export').onclick = () => { saveCodeArea.value = utoa(JSON.stringify({ components: state.components })); };
